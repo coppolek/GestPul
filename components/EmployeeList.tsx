@@ -75,10 +75,43 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
   };
 
   const handleImportEmployees = async (newEmployees: Omit<Employee, 'id'>[]) => {
-    setIsSaving(true); // Reuse saving state for import progress
+    setIsSaving(true);
     try {
-        const addedEmployees = await api.addBatchData<Omit<Employee, 'id'>, Employee>('employees', newEmployees);
-        setEmployees(prev => [...prev, ...addedEmployees]);
+        const existingPhones = new Set(employees.map(e => e.phone));
+        const employeesToImport: Omit<Employee, 'id'>[] = [];
+        const processedPhones = new Set<string>();
+
+        for (const emp of newEmployees) {
+            // If phone is empty, we cannot reliably check for duplicates, so we'll import it.
+            if (!emp.phone) {
+                employeesToImport.push(emp);
+                continue;
+            }
+
+            // Check against existing employees and employees already processed from the current file.
+            if (!existingPhones.has(emp.phone) && !processedPhones.has(emp.phone)) {
+                employeesToImport.push(emp);
+                processedPhones.add(emp.phone);
+            }
+        }
+        
+        const skippedCount = newEmployees.length - employeesToImport.length;
+        if (employeesToImport.length === 0 && newEmployees.length > 0) {
+            alert('Nessun nuovo dipendente da importare. Tutti i dipendenti nel file sono già presenti nel sistema o sono duplicati all\'interno del file stesso.');
+            handleCloseModals();
+            setIsSaving(false); // Important to reset saving state here
+            return;
+        }
+
+        if (skippedCount > 0) {
+            alert(`${skippedCount} dipendent${skippedCount > 1 ? 'i' : 'e'} ${skippedCount > 1 ? 'sono stati saltati' : 'è stato saltato'} perché già presente o duplicato nel file (controllo basato sul numero di telefono).`);
+        }
+
+        if (employeesToImport.length > 0) {
+            const addedEmployees = await api.addBatchData<Omit<Employee, 'id'>, Employee>('employees', employeesToImport);
+            setEmployees(prev => [...prev, ...addedEmployees]);
+        }
+        
         handleCloseModals();
     } catch (error) {
         console.error("Failed to import employees", error);
@@ -86,7 +119,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
     } finally {
         setIsSaving(false);
     }
-};
+  };
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => 
