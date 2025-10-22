@@ -1,6 +1,5 @@
 import React from 'react';
 import { Employee, WorkSite } from '../types';
-import Card from './ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface DashboardProps {
@@ -37,41 +36,43 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, sites }) => {
     }));
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <Card 
-          title="Dipendenti Totali" 
-          value={employees.length} 
-          icon="fa-users"
-          color="bg-blue-500"
-        />
-        <Card 
-          title="Cantieri Attivi" 
-          value={activeSites} 
-          icon="fa-building-user"
-          color="bg-green-500"
-        />
-        <Card 
-          title="Scadenze (30gg)" 
-          value={upcomingExpiries} 
-          icon="fa-calendar-check"
-          color="bg-yellow-500"
-        />
-      </div>
+    <div className="space-y-12">
+        <div className="space-y-8">
+            {/* Dipendenti Totali */}
+            <div>
+                <i className="fa-solid fa-users text-xl mb-2 text-gray-600"></i>
+                <p className="text-md text-gray-800">Dipendenti Totali</p>
+                <p className="text-2xl font-semibold">{employees.length}</p>
+            </div>
+            {/* Cantieri Attivi */}
+            <div>
+                <i className="fa-solid fa-building-user text-xl mb-2 text-gray-600"></i>
+                <p className="text-md text-gray-800">Cantieri Attivi</p>
+                <p className="text-2xl font-semibold">{activeSites}</p>
+            </div>
+            {/* Scadenze */}
+            <div>
+                <i className="fa-solid fa-calendar-check text-xl mb-2 text-gray-600"></i>
+                <p className="text-md text-gray-800">Scadenze (30gg)</p>
+                <p className="text-2xl font-semibold">{upcomingExpiries}</p>
+            </div>
+        </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Dipendenti per Cantiere Attivo</h3>
-          <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={employeesBySiteData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="Dipendenti" fill="#3b82f6" />
-              </BarChart>
-          </ResponsiveContainer>
-      </div>
+        <div>
+            <h2 className="text-2xl font-bold text-black mb-4">Dipendenti per Cantiere Attivo</h2>
+            <div style={{ width: '100%', height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={employeesBySiteData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="Dipendenti" fill="#3b82f6" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
     </div>
   );
 };

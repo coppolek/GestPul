@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee } from '../types';
 import SiteModal from './modals/SiteModal';
+import SiteImportModal from './modals/SiteImportModal';
 import * as api from '../services/api';
 
 interface SiteListProps {
@@ -11,6 +12,7 @@ interface SiteListProps {
 
 const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedSite, setSelectedSite] = useState<WorkSite | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -21,8 +23,9 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
     setIsModalOpen(true);
   };
   
-  const handleCloseModal = () => {
+  const handleCloseModals = () => {
     setIsModalOpen(false);
+    setIsImportModalOpen(false);
     setSelectedSite(null);
   };
   
@@ -30,13 +33,15 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
     setIsSaving(true);
     try {
         if (siteData.id) {
-            const updatedSite = await api.updateSite(siteData.id, siteData as WorkSite);
+            // Edit
+            const updatedSite = await api.updateData<WorkSite>('sites', siteData.id, siteData as WorkSite);
             setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
         } else {
-            const newSite = await api.addSite(siteData);
+            // Add
+            const newSite = await api.addData<Omit<WorkSite, 'id'>, WorkSite>('sites', siteData);
             setSites(prev => [...prev, newSite]);
         }
-        handleCloseModal();
+        handleCloseModals();
     } catch (error) {
         console.error("Failed to save site", error);
         alert("Salvataggio fallito. Riprova.");
@@ -53,7 +58,7 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
     }
     if(window.confirm('Sei sicuro di voler eliminare questo cantiere?')) {
         try {
-            await api.deleteSite(siteId);
+            await api.deleteData('sites', siteId);
             setSites(prev => prev.filter(s => s.id !== siteId));
         } catch (error) {
             console.error("Failed to delete site", error);
@@ -61,14 +66,39 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
         }
     }
   };
+  
+  const handleImportSites = async (newSites: Omit<WorkSite, 'id' | 'assignments' | 'status' | 'startDate' | 'endDate'>[]) => {
+      setIsSaving(true);
+      try {
+          const sitesToSave = newSites.map(site => ({
+              ...site,
+              startDate: new Date().toISOString().split('T')[0],
+              status: 'In Corso' as const,
+              assignments: [],
+          }));
+          const addedSites = await api.addBatchData<Omit<WorkSite, 'id'>, WorkSite>('sites', sitesToSave);
+          setSites(prev => [...prev, ...addedSites]);
+          handleCloseModals();
+      } catch (error) {
+          console.error("Failed to import sites", error);
+          alert("Importazione fallita. Riprova.");
+      } finally {
+          setIsSaving(false);
+      }
+  };
 
   return (
      <>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Elenco Cantieri</h2>
-        <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <i className="fa-solid fa-plus mr-2"></i>Aggiungi Cantiere
-        </button>
+        <div className="flex gap-2">
+            <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                <i className="fa-solid fa-file-import mr-2"></i>Importa
+            </button>
+            <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <i className="fa-solid fa-plus mr-2"></i>Aggiungi Cantiere
+            </button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -117,11 +147,19 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
       {isModalOpen && (
         <SiteModal
             isOpen={isModalOpen}
-            onClose={handleCloseModal}
+            onClose={handleCloseModals}
             onSave={handleSaveSite}
             site={selectedSite}
             employees={employees}
             isSaving={isSaving}
+        />
+      )}
+      {isImportModalOpen && (
+        <SiteImportModal
+            isOpen={isImportModalOpen}
+            onClose={handleCloseModals}
+            onImport={handleImportSites}
+            isImporting={isSaving}
         />
       )}
     </>

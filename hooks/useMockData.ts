@@ -17,23 +17,23 @@ export const useAppData = () => {
         try {
             setLoading(true);
             const [
-                employeesData,
-                sitesData,
-                leaveRequestsData,
+                employeesData, 
+                sitesData, 
+                leaveRequestsData, 
                 sicknessRecordsData,
                 schedulesData
             ] = await Promise.all([
-                api.getEmployees(),
-                api.getSites(),
-                api.getLeaveRequests(),
-                api.getSicknessRecords(),
-                api.getSchedules(),
+                api.getData<Employee[]>('employees'),
+                api.getData<WorkSite[]>('sites'),
+                api.getData<LeaveRequest[]>('leaveRequests'),
+                api.getData<SicknessRecord[]>('sicknessRecords'),
+                api.getData<Schedule[]>('schedules'),
             ]);
 
             setEmployees(employeesData);
             setSites(sitesData);
-            setLeaveRequests(leaveRequestsData);
-            setSicknessRecords(sicknessRecordsData);
+            setLeaveRequests(leaveRequestsData.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+            setSicknessRecords(sicknessRecordsData.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
             setSchedules(schedulesData);
 
         } catch (error) {

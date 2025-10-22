@@ -51,22 +51,13 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     const [modalContext, setModalContext] = useState<ModalContext | null>(null);
     const [draggingOver, setDraggingOver] = useState<string | null>(null);
     
+    // Debounce saving schedules
     useEffect(() => {
-        const handler = setTimeout(async () => {
-            if(schedules.length > 0) {
-                try {
-                    await Promise.all(
-                        schedules.map(schedule =>
-                            schedule.id.startsWith('sch-')
-                                ? api.updateSchedule(schedule.id, schedule)
-                                : Promise.resolve()
-                        )
-                    );
-                } catch (error) {
-                    console.error('Failed to save schedules', error);
-                }
+        const handler = setTimeout(() => {
+            if(schedules.length > 0) { // Avoid saving initial empty state
+                api.setData('schedules', schedules);
             }
-        }, 1000);
+        }, 1000); // Save 1 second after last change
         return () => clearTimeout(handler);
     }, [schedules]);
 
@@ -74,29 +65,19 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
     const jollyEmployees = useMemo(() => employees.filter(e => e.role === 'Jolly'), [employees]);
 
-    const handleAddSchedule = async () => {
-        try {
-            const newSchedule = await api.addSchedule({
-                employeeId: null,
-                label: 'Nuovo Planner',
-                assignments: {}
-            });
-            setSchedules(prev => [...prev, newSchedule]);
-        } catch (error) {
-            console.error('Failed to add schedule', error);
-            alert('Errore durante l\'aggiunta del planner. Riprova.');
-        }
+    const handleAddSchedule = () => {
+        const newSchedule: Schedule = {
+            id: `sch-${Date.now()}`,
+            employeeId: null,
+            label: 'Nuovo Planner',
+            assignments: {}
+        };
+        setSchedules(prev => [...prev, newSchedule]);
     };
 
-    const handleRemoveSchedule = async (scheduleId: string) => {
+    const handleRemoveSchedule = (scheduleId: string) => {
         if (window.confirm('Sei sicuro di voler rimuovere questo planner?')) {
-            try {
-                await api.deleteSchedule(scheduleId);
-                setSchedules(prev => prev.filter(s => s.id !== scheduleId));
-            } catch (error) {
-                console.error('Failed to delete schedule', error);
-                alert('Errore durante l\'eliminazione del planner. Riprova.');
-            }
+            setSchedules(prev => prev.filter(s => s.id !== scheduleId));
         }
     };
 

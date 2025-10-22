@@ -1,36 +1,32 @@
 import React, { useState, useMemo } from 'react';
-import { Employee } from '../../types';
+import { WorkSite } from '../../types';
 
 type ImportStep = 1 | 2;
-type RequiredFields = 'fullName' | 'address' | 'zip' | 'city' | 'phone';
+type RequiredFields = 'name' | 'client' | 'address';
 
-interface ImportModalProps {
+interface SiteImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (employees: Omit<Employee, 'id'>[]) => void;
+  onImport: (sites: Omit<WorkSite, 'id' | 'assignments' | 'status' | 'startDate' | 'endDate'>[]) => void;
   isImporting: boolean;
 }
 
 const REQUIRED_FIELDS: { key: RequiredFields; label: string }[] = [
-    { key: 'fullName', label: 'Cognome Nome' },
+    { key: 'name', label: 'Nome Cantiere' },
+    { key: 'client', label: 'Comune' },
     { key: 'address', label: 'Indirizzo' },
-    { key: 'zip', label: 'CAP' },
-    { key: 'city', label: 'Città' },
-    { key: 'phone', label: 'Telefono/Cellulare' },
 ];
 
-const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, isImporting }) => {
+const SiteImportModal: React.FC<SiteImportModalProps> = ({ isOpen, onClose, onImport, isImporting }) => {
     const [step, setStep] = useState<ImportStep>(1);
     const [file, setFile] = useState<File | null>(null);
     const [separator, setSeparator] = useState<string>(',');
     const [headers, setHeaders] = useState<string[]>([]);
     const [data, setData] = useState<string[][]>([]);
     const [mapping, setMapping] = useState<Record<RequiredFields, string>>({
-        fullName: '',
+        name: '',
+        client: '',
         address: '',
-        zip: '',
-        city: '',
-        phone: '',
     });
     const [error, setError] = useState<string>('');
 
@@ -40,7 +36,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
         setSeparator(',');
         setHeaders([]);
         setData([]);
-        setMapping({ fullName: '', address: '', zip: '', city: '', phone: '' });
+        setMapping({ name: '', client: '', address: '' });
         setError('');
     };
 
@@ -87,75 +83,33 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
     const processImport = () => {
         const mappedIndices = Object.fromEntries(
             Object.entries(mapping).map(([field, header]) => [field, headers.indexOf(header)])
-        ) as Record<RequiredFields, number>;
+        );
 
         if (Object.values(mappedIndices).some(index => index === -1)) {
             setError('Mappare tutte le colonne richieste.');
             return;
         }
 
-        const importedEmployees = data.map((row, index) => {
-            const fullName = row[mappedIndices.fullName] || '';
-            const [lastName, ...firstNameParts] = fullName.split(' ');
-            const firstName = firstNameParts.join(' ');
-            
-            const street = row[mappedIndices.address] || '';
-            const zip = row[mappedIndices.zip] || '';
-            const city = row[mappedIndices.city] || '';
-            const fullAddress = `${street}, ${zip} ${city}`.trim().replace(/^,|,$/g, '').trim();
-
-            const phone = row[mappedIndices.phone] || '';
-
-            if (!firstName || !lastName) {
-                return null; // Skip invalid rows
-            }
-            
-            const sanitizedFirstName = firstName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const sanitizedLastName = lastName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            
-            const today = new Date();
-            const nextYear = new Date(new Date().setFullYear(today.getFullYear() + 1));
-
+        const importedSites = data.map(row => {
             return {
-                firstName: firstName,
-                lastName: lastName,
-                role: 'Operatore',
-                contractType: 'Tempo Indeterminato',
-                startDate: today.toISOString().split('T')[0],
-                medicalVisitExpiry: nextYear.toISOString().split('T')[0],
-                phone: phone,
-                email: `${sanitizedFirstName}.${sanitizedLastName}${index}@example.com`,
-                address: fullAddress,
-                notes: '',
-                endDate: '',
+                name: row[mappedIndices.name] || '',
+                client: row[mappedIndices.client] || '',
+                address: row[mappedIndices.address] || '',
             };
-        }).filter((emp): emp is Omit<Employee, 'id'> => emp !== null);
+        }).filter(site => site.name && site.client && site.address); // Filter out empty rows
 
-        onImport(importedEmployees);
+        onImport(importedSites);
     };
 
     const previewData = useMemo(() => {
          const mappedIndices = Object.fromEntries(
             Object.entries(mapping).map(([field, header]) => [field, headers.indexOf(header)])
-        ) as Record<RequiredFields, number>;
-        
-        return data.slice(0, 5).map(row => {
-            const fullName = row[mappedIndices.fullName] || 'N/A';
-            const [lastName, ...firstNameParts] = fullName.split(' ');
-            const firstName = firstNameParts.join(' ');
-
-            const street = row[mappedIndices.address] || '';
-            const zip = row[mappedIndices.zip] || '';
-            const city = row[mappedIndices.city] || '';
-            const fullAddress = `${street}, ${zip} ${city}`.trim().replace(/^,|,$/g, '').trim();
-
-            return {
-                firstName: mappedIndices.fullName > -1 ? firstName : 'N/A',
-                lastName: mappedIndices.fullName > -1 ? lastName : 'N/A',
-                address: mappedIndices.address > -1 && mappedIndices.zip > -1 && mappedIndices.city > -1 ? fullAddress : 'N/A',
-                phone: row[mappedIndices.phone] || 'N/A',
-            }
-        });
+        );
+        return data.slice(0, 5).map(row => ({
+            name: row[mappedIndices.name] || 'N/A',
+            client: row[mappedIndices.client] || 'N/A',
+            address: row[mappedIndices.address] || 'N/A',
+        }));
     }, [data, mapping, headers]);
 
 
@@ -163,9 +117,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center" onClick={handleClose}>
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-4xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-3xl" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Importa Dipendenti (Passo {step} di 2)</h2>
+            <h2 className="text-2xl font-bold text-gray-800">Importa Cantieri (Passo {step} di 2)</h2>
             <button onClick={handleClose} className="text-gray-500 hover:text-gray-800 text-2xl" disabled={isImporting}>&times;</button>
         </div>
         
@@ -191,7 +145,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
                     <label htmlFor="file-upload" className="cursor-pointer">
                         <i className="fa-solid fa-cloud-arrow-up text-5xl text-gray-400 mb-4"></i>
                         <p className="text-gray-600 font-semibold">Trascina qui il tuo file CSV o clicca per selezionare</p>
-                        <p className="text-sm text-gray-500 mt-1">Il file deve contenere almeno le colonne: Cognome Nome, Indirizzo, CAP, Città, Telefono/Cellulare.</p>
+                        <p className="text-sm text-gray-500 mt-1">Il file deve contenere almeno le colonne: nome cantiere, comune, indirizzo.</p>
                     </label>
                 </div>
                 <div className="mt-6 text-center">
@@ -214,7 +168,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
             <div>
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Mappa le colonne del tuo file</h3>
                 <fieldset disabled={isImporting}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 mb-6 p-4 border rounded-lg bg-gray-50">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 p-4 border rounded-lg bg-gray-50">
                         {REQUIRED_FIELDS.map(({key, label}) => (
                              <div key={key}>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -235,19 +189,17 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-2 font-semibold">Nome</th>
-                                    <th className="p-2 font-semibold">Cognome</th>
-                                    <th className="p-2 font-semibold">Indirizzo Completo</th>
-                                    <th className="p-2 font-semibold">Telefono</th>
+                                    <th className="p-2">Nome Cantiere</th>
+                                    <th className="p-2">Comune</th>
+                                    <th className="p-2">Indirizzo</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {previewData.map((row, index) => (
                                     <tr key={index} className="border-b">
-                                        <td className="p-2">{row.firstName}</td>
-                                        <td className="p-2">{row.lastName}</td>
+                                        <td className="p-2">{row.name}</td>
+                                        <td className="p-2">{row.client}</td>
                                         <td className="p-2">{row.address}</td>
-                                        <td className="p-2">{row.phone}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -267,4 +219,4 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
   );
 };
 
-export default ImportModal;
+export default SiteImportModal;
