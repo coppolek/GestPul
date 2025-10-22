@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import EmployeeList from './components/EmployeeList';
 import SiteList from './components/SiteList';
+import UserList from './components/UserList';
 import JollyPlans from './components/JollyPlans';
 import { useAppData } from './hooks/useMockData';
 import LeaveRequests from './components/absences/LeaveRequests';
@@ -49,7 +49,7 @@ const SubNavItem: React.FC<{ to: string; children: React.ReactNode }> = ({ to, c
 
 const MainApp = () => {
     const { user, logout } = useAuth();
-    const { employees, setEmployees, sites, setSites, leaveRequests, setLeaveRequests, sicknessRecords, setSicknessRecords, schedules, setSchedules, loading } = useAppData();
+    const { employees, setEmployees, sites, setSites, leaveRequests, setLeaveRequests, sicknessRecords, setSicknessRecords, schedules, setSchedules, users, setUsers, loading } = useAppData();
     const location = useLocation();
 
     const getPageTitle = () => {
@@ -58,6 +58,7 @@ const MainApp = () => {
             case '/': return 'Dashboard';
             case '/employees': return 'Anagrafica Dipendenti';
             case '/sites': return 'Gestione Cantieri';
+            case '/users': return 'Gestione Utenti';
             case '/absences/requests': return 'Richieste Ferie e Permessi';
             case '/absences/sickness': return 'Gestione Malattie';
             case '/absences/weekly': return 'Riepilogo Assenze Settimanali';
@@ -70,6 +71,7 @@ const MainApp = () => {
         { to: '/', icon: 'fa-chart-pie', text: 'Dashboard', roles: ['Amministratore', 'Responsabile'] },
         { to: '/employees', icon: 'fa-users', text: 'Dipendenti', roles: ['Amministratore', 'Responsabile'] },
         { to: '/sites', icon: 'fa-building-user', text: 'Cantieri', roles: ['Amministratore', 'Responsabile'] },
+        { to: '/users', icon: 'fa-user-shield', text: 'Utenti', roles: ['Amministratore'] },
         { type: 'accordion', icon: 'fa-person-walking', title: 'Assenze', roles: ['Amministratore', 'Responsabile'], children: [
             { to: '/absences/requests', text: 'Richieste' },
             { to: '/absences/sickness', text: 'Malattie' },
@@ -136,6 +138,7 @@ const MainApp = () => {
                         {renderRoute("/", <Dashboard employees={employees} sites={sites} />, ['Amministratore', 'Responsabile', 'Lavoratore'])}
                         {renderRoute("/employees", <EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/sites", <SiteList sites={sites} setSites={setSites} employees={employees} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/users", <UserList users={users} setUsers={setUsers} employees={employees} />, ['Amministratore'])}
                         {renderRoute("/absences/requests", <LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/sickness", <Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/weekly", <WeeklyAbsences employees={employees} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} />, ['Amministratore', 'Responsabile'])}

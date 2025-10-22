@@ -1,4 +1,3 @@
-
 export interface Employee {
   id: string;
   firstName: string;
@@ -87,4 +86,5 @@ export interface User {
   username: string;
   role: Role;
   employeeId?: string; // Links user login to an employee record
+  password?: string; // Only used for creating/updating
 }

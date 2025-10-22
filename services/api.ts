@@ -1,4 +1,4 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, AbsenceStatus, AbsenceType, SiteAssignment, Schedule } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, AbsenceStatus, AbsenceType, SiteAssignment, Schedule, User } from '../types';
 
 const SIMULATED_LATENCY = 500;
 
@@ -37,12 +37,19 @@ const initialSicknessRecords: SicknessRecord[] = [
 
 const initialSchedules: Schedule[] = [];
 
+const initialUsers: User[] = [
+    { id: 'user-1', username: 'admin', password: 'admin', role: 'Amministratore' },
+    { id: 'user-2', username: 'responsabile', password: 'responsabile', role: 'Responsabile' },
+    { id: 'user-3', username: 'mario.rossi', password: 'password', role: 'Lavoratore', employeeId: 'emp-1' },
+];
+
 const ALL_INITIAL_DATA = {
     employees: initialEmployees,
     sites: initialSites,
     leaveRequests: initialLeaveRequests,
     sicknessRecords: initialSicknessRecords,
-    schedules: initialSchedules
+    schedules: initialSchedules,
+    users: initialUsers,
 }
 
 type DataKey = keyof typeof ALL_INITIAL_DATA;

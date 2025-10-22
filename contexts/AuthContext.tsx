@@ -1,21 +1,6 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { User, Role } from '../types';
-
-// Mock users database
-const mockUsers: User[] = [
-    { id: 'user-1', username: 'admin', role: 'Amministratore' },
-    { id: 'user-2', username: 'responsabile', role: 'Responsabile' },
-    { id: 'user-3', username: 'mario.rossi', role: 'Lavoratore', employeeId: 'emp-1' },
-];
-
-// Mock password check
-const checkPassword = (username: string, pass: string): User | null => {
-    if (username === 'admin' && pass === 'admin') return mockUsers.find(u => u.username === 'admin') || null;
-    if (username === 'responsabile' && pass === 'responsabile') return mockUsers.find(u => u.username === 'responsabile') || null;
-    if (username === 'mario.rossi' && pass === 'password') return mockUsers.find(u => u.username === 'mario.rossi') || null;
-    return null;
-}
+import { User } from '../types';
+import * as api from '../services/api';
 
 interface AuthContextType {
     user: User | null;
@@ -46,18 +31,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const login = async (username: string, pass: string): Promise<User | null> => {
-        return new Promise(resolve => {
-            setTimeout(() => {
-                const foundUser = checkPassword(username, pass);
-                if (foundUser) {
-                    setUser(foundUser);
-                    sessionStorage.setItem('user', JSON.stringify(foundUser));
-                    resolve(foundUser);
-                } else {
-                    resolve(null);
-                }
-            }, 500); // Simulate network delay
-        });
+        // In a real app, never store plaintext passwords. This is for mock purposes.
+        const allUsers = await api.getData<User[]>('users');
+        const foundUser = allUsers.find(u => u.username === username && u.password === pass);
+
+        if (foundUser) {
+            // IMPORTANT: Never store the password in the session or state.
+            const { password, ...userToStore } = foundUser;
+            setUser(userToStore as User);
+            sessionStorage.setItem('user', JSON.stringify(userToStore));
+            return userToStore as User;
+        }
+        return null;
     };
 
     const logout = () => {
