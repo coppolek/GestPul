@@ -17,11 +17,11 @@ const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests,
   const handleSaveRequest = async (requestData: Omit<LeaveRequest, 'id' | 'status'>) => {
     setIsSaving(true);
     try {
-        const newRequest = await api.addData<Omit<LeaveRequest, 'id'>, LeaveRequest>('leaveRequests', {
+        const newRequest = await api.addLeaveRequest({
             ...requestData,
             status: AbsenceStatus.IN_ATTESA,
         });
-        setLeaveRequests(prev => [...prev, newRequest].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+        setLeaveRequests(prev => [newRequest, ...prev]);
         setIsModalOpen(false);
     } catch (error) {
         console.error("Failed to save leave request", error);
@@ -34,16 +34,14 @@ const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests,
   const handleStatusChange = async (requestId: string, newStatus: AbsenceStatus) => {
     const originalRequest = leaveRequests.find(r => r.id === requestId);
     if (!originalRequest) return;
-    
-    // Optimistic UI update
+
     setLeaveRequests(prev => prev.map(req => req.id === requestId ? { ...req, status: newStatus } : req));
-    
+
     try {
-        await api.updateData<LeaveRequest>('leaveRequests', requestId, { ...originalRequest, status: newStatus });
+        await api.updateLeaveRequest(requestId, { ...originalRequest, status: newStatus });
     } catch (error) {
         console.error("Failed to update status", error);
         alert("Aggiornamento stato fallito. Riprova.");
-        // Revert on error
         setLeaveRequests(prev => prev.map(req => req.id === requestId ? originalRequest : req));
     }
   };

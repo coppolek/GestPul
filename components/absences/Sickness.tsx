@@ -17,8 +17,8 @@ const Sickness: React.FC<SicknessProps> = ({ employees, sicknessRecords, setSick
   const handleSaveRecord = async (recordData: Omit<SicknessRecord, 'id'>) => {
     setIsSaving(true);
     try {
-        const newRecord = await api.addData<Omit<SicknessRecord, 'id'>, SicknessRecord>('sicknessRecords', recordData);
-        setSicknessRecords(prev => [...prev, newRecord].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+        const newRecord = await api.addSicknessRecord(recordData);
+        setSicknessRecords(prev => [newRecord, ...prev]);
         setIsModalOpen(false);
     } catch (error) {
         console.error("Failed to save sickness record", error);
@@ -31,7 +31,7 @@ const Sickness: React.FC<SicknessProps> = ({ employees, sicknessRecords, setSick
   const handleDeleteRecord = async (recordId: string) => {
       if (window.confirm('Sei sicuro di voler eliminare questa registrazione di malattia?')) {
           try {
-              await api.deleteData('sicknessRecords', recordId);
+              await api.deleteSicknessRecord(recordId);
               setSicknessRecords(prev => prev.filter(r => r.id !== recordId));
           } catch(error) {
               console.error("Failed to delete sickness record", error);

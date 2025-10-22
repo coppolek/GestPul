@@ -40,12 +40,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
     setIsSaving(true);
     try {
         if (employeeData.id) {
-            // Edit
-            const updatedEmployee = await api.updateData<Employee>('employees', employeeData.id, employeeData as Employee);
+            const updatedEmployee = await api.updateEmployee(employeeData.id, employeeData as Employee);
             setEmployees(prev => prev.map(e => e.id === updatedEmployee.id ? updatedEmployee : e));
         } else {
-            // Add
-            const newEmployee = await api.addData<Omit<Employee, 'id'>, Employee>('employees', employeeData);
+            const newEmployee = await api.addEmployee(employeeData);
             setEmployees(prev => [...prev, newEmployee]);
         }
         handleCloseModals();
@@ -65,7 +63,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
     }
     if (window.confirm('Sei sicuro di voler eliminare questo dipendente?')) {
         try {
-            await api.deleteData('employees', employeeId);
+            await api.deleteEmployee(employeeId);
             setEmployees(prev => prev.filter(e => e.id !== employeeId));
         } catch (error) {
             console.error("Failed to delete employee", error);
@@ -75,9 +73,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
   };
 
   const handleImportEmployees = async (newEmployees: Omit<Employee, 'id'>[]) => {
-    setIsSaving(true); // Reuse saving state for import progress
+    setIsSaving(true);
     try {
-        const addedEmployees = await api.addBatchData<Omit<Employee, 'id'>, Employee>('employees', newEmployees);
+        const addedEmployees = await api.addEmployees(newEmployees);
         setEmployees(prev => [...prev, ...addedEmployees]);
         handleCloseModals();
     } catch (error) {

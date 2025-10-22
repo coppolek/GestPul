@@ -30,12 +30,10 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
     setIsSaving(true);
     try {
         if (siteData.id) {
-            // Edit
-            const updatedSite = await api.updateData<WorkSite>('sites', siteData.id, siteData as WorkSite);
+            const updatedSite = await api.updateSite(siteData.id, siteData as WorkSite);
             setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
         } else {
-            // Add
-            const newSite = await api.addData<Omit<WorkSite, 'id'>, WorkSite>('sites', siteData);
+            const newSite = await api.addSite(siteData);
             setSites(prev => [...prev, newSite]);
         }
         handleCloseModal();
@@ -55,7 +53,7 @@ const SiteList: React.FC<SiteListProps> = ({ sites, setSites, employees }) => {
     }
     if(window.confirm('Sei sicuro di voler eliminare questo cantiere?')) {
         try {
-            await api.deleteData('sites', siteId);
+            await api.deleteSite(siteId);
             setSites(prev => prev.filter(s => s.id !== siteId));
         } catch (error) {
             console.error("Failed to delete site", error);
