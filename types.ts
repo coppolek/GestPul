@@ -78,3 +78,13 @@ export interface Schedule {
       [date: string]: Assignment[];
     };
 }
+
+// --- Auth Types ---
+export type Role = 'Amministratore' | 'Responsabile' | 'Lavoratore';
+
+export interface User {
+  id: string;
+  username: string;
+  role: Role;
+  employeeId?: string; // Links user login to an employee record
+}
