@@ -5,6 +5,21 @@ import AssignmentModal from './modals/AssignmentModal';
 import * as api from '../services/api';
 import { GoogleGenAI } from '@google/genai';
 
+const calculateHours = (startTime: string, endTime: string): number => {
+    try {
+        const start = new Date(`1970-01-01T${startTime}:00`);
+        const end = new Date(`1970-01-01T${endTime}:00`);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+            return 0;
+        }
+        const diff = end.getTime() - start.getTime();
+        return diff / (1000 * 60 * 60);
+    } catch (e) {
+        console.error("Error calculating hours", e);
+        return 0;
+    }
+};
+
 const ALL_WEEK_DAYS = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 
 const getWeekDates = (currentDate: Date): Date[] => {
@@ -55,6 +70,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     const [draggingOver, setDraggingOver] = useState<string | null>(null);
     const [isPlanning, setIsPlanning] = useState(false);
     const [planningError, setPlanningError] = useState<string | null>(null);
+    const [conflicts, setConflicts] = useState<Set<string>>(new Set());
     
     // Debounce saving schedules
     useEffect(() => {
@@ -65,6 +81,35 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
         }, 1000); // Save 1 second after last change
         return () => clearTimeout(handler);
     }, [schedules]);
+
+    // Conflict detection
+    useEffect(() => {
+        const newConflicts = new Set<string>();
+
+        schedules.forEach(schedule => {
+            // Check each day's assignments for the current schedule
+            Object.values(schedule.assignments).forEach(dayAssignments => {
+                // FIX: Add type guard to ensure dayAssignments is an array before accessing its properties.
+                if (!Array.isArray(dayAssignments) || dayAssignments.length < 2) return;
+
+                const sortedAssignments = [...dayAssignments].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                for (let i = 0; i < sortedAssignments.length - 1; i++) {
+                    const currentAssignment = sortedAssignments[i];
+                    const nextAssignment = sortedAssignments[i + 1];
+
+                    // Check for overlap: if current one ends after the next one starts
+                    if (currentAssignment.endTime > nextAssignment.startTime) {
+                        newConflicts.add(currentAssignment.id);
+                        newConflicts.add(nextAssignment.id);
+                    }
+                }
+            });
+        });
+
+        setConflicts(newConflicts);
+    }, [schedules]);
+
 
     const siteMap = useMemo(() => new Map(sites.map(site => [site.id, site])), [sites]);
     const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
@@ -461,6 +506,12 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                             )}
                         </div>
                     )}
+                    {conflicts.size > 0 && (
+                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                            <i className="fa-solid fa-exclamation-triangle mr-2"></i>
+                            <span className="font-bold">Attenzione:</span> Sono presenti incarichi con orari sovrapposti. Modificali per risolvere i conflitti.
+                        </div>
+                    )}
                     
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
@@ -477,6 +528,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                                             </th>
                                          )
                                      })}
+                                     <th className="p-2 border text-sm font-semibold text-gray-600 w-28">
+                                        Totale Ore
+                                    </th>
                                 </tr>
                             </thead>
                              <tbody>
@@ -484,6 +538,13 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                                     const availableJolly = jollyEmployees.filter(e => 
                                         !schedules.some(s => s.employeeId === e.id && s.id !== schedule.id)
                                     );
+                                    const weeklyTotalHours = weekDates.reduce((total, date) => {
+                                        const dateString = date.toISOString().split('T')[0];
+                                        const dayAssignments = schedule.assignments[dateString] || [];
+                                        const dayHours = dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0);
+                                        return total + dayHours;
+                                    }, 0);
+
                                     return (
                                     <tr key={schedule.id} className="h-full">
                                         <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 w-52 align-top">
@@ -510,6 +571,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                                         {weekDates.map(date => {
                                             const dateString = date.toISOString().split('T')[0];
                                             const assignments = schedule.assignments[dateString] || [];
+                                            const dailyTotalHours = assignments.reduce((total, ass) => total + calculateHours(ass.startTime, ass.endTime), 0);
                                             const cellKey = `${schedule.id}-${dateString}`;
                                             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                                             return (
@@ -518,29 +580,54 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                                                     onDrop={(e) => handleDrop(e, schedule.id, dateString)}
                                                     onDragOver={handleDragOver}
                                                     onDragEnter={(e) => handleDragEnter(e, cellKey)}
-                                                    className={`p-1 border align-top min-h-[120px] h-full transition-colors space-y-2 ${isWeekend ? 'bg-gray-50 border-gray-200' : 'border-gray-300'} ${draggingOver === cellKey ? 'bg-blue-100' : ''}`}
+                                                    className={`p-1 border align-top min-h-[120px] h-full transition-colors ${isWeekend ? 'bg-gray-50 border-gray-200' : 'border-gray-300'} ${draggingOver === cellKey ? 'bg-blue-100' : ''}`}
                                                 >
-                                                    <div className="space-y-2">
-                                                        {assignments.map(assignment => {
-                                                             const site = siteMap.get(assignment.siteId);
-                                                             return (
-                                                                <div key={assignment.id} className="p-2 bg-blue-100 rounded-lg text-xs text-blue-900 shadow-sm group relative">
-                                                                    <p className="font-bold">{site?.name || 'Cantiere non trovato'}</p>
-                                                                    <p>{assignment.startTime} - {assignment.endTime}</p>
-                                                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
-                                                                        <button onClick={() => openEditAssignmentModal(index, schedule.id, dateString, assignment)} className="text-blue-700 hover:text-blue-900"><i className="fa-solid fa-pencil"></i></button>
-                                                                        <button onClick={() => handleDeleteAssignment(schedule.id, dateString, assignment.id)} className="text-red-600 hover:text-red-800"><i className="fa-solid fa-trash"></i></button>
+                                                    <div className="flex flex-col h-full justify-between">
+                                                        <div className="space-y-1 flex-grow">
+                                                            {assignments.map(assignment => {
+                                                                const site = siteMap.get(assignment.siteId);
+                                                                const assignmentHours = calculateHours(assignment.startTime, assignment.endTime);
+                                                                const isConflicting = conflicts.has(assignment.id);
+                                                                return (
+                                                                    <div key={assignment.id} className={`p-2 rounded-lg text-xs shadow-sm group relative ${isConflicting ? 'bg-red-200 text-red-900 border border-red-500' : 'bg-blue-100 text-blue-900'}`}>
+                                                                        <p className="font-bold flex items-center">
+                                                                            {isConflicting && <i className="fa-solid fa-exclamation-triangle mr-2 text-red-700" title="Conflitto di orario"></i>}
+                                                                            {site?.name || 'Cantiere non trovato'}
+                                                                        </p>
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span>{assignment.startTime} - {assignment.endTime}</span>
+                                                                            <span className="font-semibold">({assignmentHours.toFixed(2)}h)</span>
+                                                                        </div>
+                                                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                                                            <button onClick={() => openEditAssignmentModal(index, schedule.id, dateString, assignment)} className="text-blue-700 hover:text-blue-900"><i className="fa-solid fa-pencil"></i></button>
+                                                                            <button onClick={() => handleDeleteAssignment(schedule.id, dateString, assignment.id)} className="text-red-600 hover:text-red-800"><i className="fa-solid fa-trash"></i></button>
+                                                                        </div>
                                                                     </div>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                         <div className="mt-1 flex-shrink-0">
+                                                            {dailyTotalHours > 0 && (
+                                                                <div className="text-right text-xs font-bold text-gray-700 py-1 border-t">
+                                                                    Totale Giorno: {dailyTotalHours.toFixed(2)}h
                                                                 </div>
-                                                             )
-                                                         })}
+                                                            )}
+                                                            <button onClick={() => openNewAssignmentModal(index, schedule.id, dateString)} className="w-full text-center py-1 bg-gray-200 text-gray-500 rounded hover:bg-gray-300 hover:text-gray-700 transition-colors text-xs">
+                                                                <i className="fa-solid fa-plus"></i>
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <button onClick={() => openNewAssignmentModal(index, schedule.id, dateString)} className="mt-2 w-full text-center py-1 bg-gray-200 text-gray-500 rounded hover:bg-gray-300 hover:text-gray-700 transition-colors text-xs">
-                                                        <i className="fa-solid fa-plus"></i>
-                                                    </button>
                                                 </td>
                                             )
                                         })}
+                                        <td className="p-2 border align-middle text-center">
+                                            <div className="font-bold text-lg text-gray-800">
+                                                {weeklyTotalHours > 0 ? weeklyTotalHours.toFixed(2) : '-'}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                ore sett.
+                                            </div>
+                                        </td>
                                     </tr>
                                     )
                                 })}
