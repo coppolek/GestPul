@@ -78,11 +78,12 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
 
                 **Istruzioni:**
                 1. **Verifica Disponibilità:** Per ogni dipendente, controlla se ha già un'assegnazione che si sovrappone con i giorni e gli orari richiesti per il nuovo cantiere. Un dipendente non è disponibile se è già impegnato. Considera le fasce orarie che si sovrappongono.
-                2. **Calcola Distanza:** Per tutti i dipendenti che risultano disponibili, calcola la distanza e il tempo di percorrenza in auto dal loro indirizzo di casa all'indirizzo del nuovo cantiere.
+                2. **Calcola Distanza:** Per tutti i dipendenti che risultano disponibili, usa gli strumenti a disposizione per calcolare la distanza e il tempo di percorrenza in auto dal loro indirizzo di casa all'indirizzo del nuovo cantiere.
                 3. **Crea una Lista Ordinata:** Restituisci una lista dei soli dipendenti disponibili, ordinata dal più vicino al più lontano (in base al tempo di percorrenza).
 
                 **Formato di Risposta:**
-                La tua risposta DEVE essere **esclusivamente** un array JSON valido, senza alcuna formattazione aggiuntiva come backtick (\`\`\`json), spiegazioni o testo introduttivo. L'array deve contenere oggetti, dove ogni oggetto rappresenta un dipendente disponibile e contiene le seguenti chiavi:
+                La tua intera risposta deve essere **SOLO ed esclusivamente** un array JSON valido. Non includere testo, spiegazioni, o marcatori di codice come \`\`\`json. La risposta deve iniziare con il carattere \`[\` e terminare con il carattere \`]\`.
+                L'array deve contenere oggetti, dove ogni oggetto rappresenta un dipendente disponibile e contiene le seguenti chiavi:
                 - "employeeId": (string) L'ID del dipendente.
                 - "employeeName": (string) Il nome completo del dipendente.
                 - "employeeAddress": (string) L'indirizzo di casa del dipendente.
@@ -100,21 +101,28 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
                 },
             });
             
-            let responseText = response.text.trim();
-            
-            // Clean up potential markdown code blocks
-            if (responseText.startsWith('```json')) {
-                responseText = responseText.substring(7, responseText.length - 3).trim();
-            } else if (responseText.startsWith('```')) {
-                 responseText = responseText.substring(3, responseText.length - 3).trim();
+            const responseText = response.text;
+            // Use a regex to find the first valid JSON array in the response text,
+            // as the model might occasionally add extra text before or after it.
+            const match = responseText.match(/(\[[\s\S]*?\])/);
+
+            if (!match || !match[0]) {
+                console.error("Invalid response format, no JSON array found:", responseText);
+                throw new Error("La risposta del modello non è nel formato previsto. Risposta ricevuta: " + responseText);
             }
 
-            const searchResults: OperatorSearchResult[] = JSON.parse(responseText);
-            setResults(searchResults);
+            try {
+                const searchResults: OperatorSearchResult[] = JSON.parse(match[0]);
+                setResults(searchResults);
+            } catch (parseError) {
+                console.error("Failed to parse extracted JSON:", match[0], parseError);
+                throw new Error("Formato JSON non valido ricevuto dal modello.");
+            }
 
         } catch (e) {
             console.error("Error calling Gemini API:", e);
-            setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
+            const errorMessage = e instanceof Error ? e.message : "Si è verificato un errore sconosciuto.";
+            setError(`Si è verificato un errore durante la ricerca. Dettagli: ${errorMessage}`);
         } finally {
             setIsLoading(false);
         }
