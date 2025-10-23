@@ -88,3 +88,10 @@ export interface User {
   employeeId?: string; // Links user login to an employee record
   password?: string; // Only used for creating/updating
 }
+
+// --- Settings Types ---
+export interface ApiKey {
+    id: 'google_gemini'; // Can be expanded with a union type for more keys
+    name: string;
+    key: string;
+}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Employee, WorkSite } from '../types';
+import { NavLink } from 'react-router-dom';
+import { Employee, WorkSite, ApiKey } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 // Interface for the structured JSON response from Gemini
@@ -14,11 +15,12 @@ interface OperatorSearchResult {
 interface FindOperatorsProps {
   employees: Employee[];
   sites: WorkSite[];
+  apiKeys: ApiKey[];
 }
 
 const ALL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 
-const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
+const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys }) => {
     const [address, setAddress] = useState('');
     const [startTime, setStartTime] = useState('08:00');
     const [endTime, setEndTime] = useState('17:00');
@@ -35,6 +37,12 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
     };
 
     const handleSearch = async () => {
+        const geminiApiKey = apiKeys.find(k => k.id === 'google_gemini')?.key;
+        if (!geminiApiKey) {
+            setError("La chiave API di Google Gemini non è stata impostata. Vai su Impostazioni API per configurarla.");
+            return;
+        }
+
         if (!address || workingDays.length === 0) {
             setError("Per favore, inserisci l'indirizzo del cantiere e seleziona almeno un giorno di lavoro.");
             return;
@@ -45,7 +53,7 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
         setResults(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
             const employeeDataForPrompt = employees.map(emp => ({
                 id: emp.id,
@@ -236,7 +244,23 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
 
             {/* Results section */}
             <div id="results">
-                {error && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert"><p className="font-bold">Errore</p><p>{error}</p></div>}
+                 {error && (
+                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert">
+                        <p className="font-bold">Errore</p>
+                        <p>
+                            {error.includes("Impostazioni API") ? (
+                                <>
+                                    {error}
+                                    <NavLink to="/api-settings" className="font-bold underline hover:text-red-900 ml-1">
+                                        Vai alle impostazioni.
+                                    </NavLink>
+                                </>
+                            ) : (
+                                error
+                            )}
+                        </p>
+                    </div>
+                )}
                 
                 {isLoading && (
                      <div className="text-center py-10">

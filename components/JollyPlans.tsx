@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Assignment, Schedule, AbsenceStatus } from '../types';
+import { NavLink } from 'react-router-dom';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Assignment, Schedule, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
 import * as api from '../services/api';
 import { GoogleGenAI } from '@google/genai';
@@ -44,9 +45,10 @@ interface JollyPlansProps {
     sicknessRecords: SicknessRecord[];
     schedules: Schedule[];
     setSchedules: React.Dispatch<React.SetStateAction<Schedule[]>>;
+    apiKeys: ApiKey[];
 }
 
-const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests, sicknessRecords, schedules, setSchedules }) => {
+const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests, sicknessRecords, schedules, setSchedules, apiKeys }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContext, setModalContext] = useState<ModalContext | null>(null);
@@ -249,8 +251,15 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     };
 
     const handleAutoPlan = async () => {
-        setIsPlanning(true);
         setPlanningError(null);
+        
+        const geminiApiKey = apiKeys.find(k => k.id === 'google_gemini')?.key;
+        if (!geminiApiKey) {
+            setPlanningError("La chiave API di Google Gemini non è impostata.");
+            return;
+        }
+
+        setIsPlanning(true);
 
         const uncoveredShifts = absentEmployeesThisWeek.flatMap(({ weeklyAssignments }) => 
             Array.from(weeklyAssignments.entries()).flatMap(([day, assignments]) => {
@@ -290,7 +299,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
         }));
         
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
             
             const prompt = `
                 Sei un esperto di logistica e pianificazione della forza lavoro per un'impresa di pulizie.
@@ -442,7 +451,16 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                             </button>
                         </div>
                     </div>
-                    {planningError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{planningError}</div>}
+                     {planningError && (
+                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                            {planningError}
+                            {planningError.includes("chiave API") && (
+                                <NavLink to="/api-settings" className="font-bold underline hover:text-red-900 ml-1">
+                                    Vai alle impostazioni.
+                                </NavLink>
+                            )}
+                        </div>
+                    )}
                     
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">

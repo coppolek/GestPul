@@ -13,6 +13,7 @@ import { useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import { Role } from './types';
 import FindOperators from './components/FindOperators';
+import ApiSettings from './components/ApiSettings';
 
 // --- Navigation Components ---
 
@@ -50,7 +51,7 @@ const SubNavItem: React.FC<{ to: string; children: React.ReactNode }> = ({ to, c
 
 const MainApp = () => {
     const { user, logout } = useAuth();
-    const { employees, setEmployees, sites, setSites, leaveRequests, setLeaveRequests, sicknessRecords, setSicknessRecords, schedules, setSchedules, users, setUsers, loading } = useAppData();
+    const { employees, setEmployees, sites, setSites, leaveRequests, setLeaveRequests, sicknessRecords, setSicknessRecords, schedules, setSchedules, users, setUsers, apiKeys, setApiKeys, loading } = useAppData();
     const location = useLocation();
 
     const getPageTitle = () => {
@@ -65,6 +66,7 @@ const MainApp = () => {
             case '/absences/sickness': return 'Gestione Malattie';
             case '/absences/weekly': return 'Riepilogo Assenze Settimanali';
             case '/jolly': return 'Pianificazione Jolly';
+            case '/api-settings': return 'Impostazioni API';
             default: return 'Gestionale Cantieri';
         }
     };
@@ -81,6 +83,7 @@ const MainApp = () => {
             { to: '/absences/weekly', text: 'Riepilogo' }
         ]},
         { to: '/jolly', icon: 'fa-shuffle', text: 'Pianifica Jolly', roles: ['Amministratore', 'Responsabile'] },
+        { to: '/api-settings', icon: 'fa-key', text: 'Impostazioni API', roles: ['Amministratore'] },
         // Lavoratore links
         { to: '/', icon: 'fa-tachometer-alt', text: 'Mia Dashboard', roles: ['Lavoratore'] },
     ];
@@ -141,12 +144,13 @@ const MainApp = () => {
                         {renderRoute("/", <Dashboard employees={employees} sites={sites} />, ['Amministratore', 'Responsabile', 'Lavoratore'])}
                         {renderRoute("/employees", <EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/sites", <SiteList sites={sites} setSites={setSites} employees={employees} />, ['Amministratore', 'Responsabile'])}
-                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} apiKeys={apiKeys} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/users", <UserList users={users} setUsers={setUsers} employees={employees} />, ['Amministratore'])}
                         {renderRoute("/absences/requests", <LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/sickness", <Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/weekly", <WeeklyAbsences employees={employees} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} />, ['Amministratore', 'Responsabile'])}
-                        {renderRoute("/jolly", <JollyPlans employees={employees} sites={sites} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} schedules={schedules} setSchedules={setSchedules} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/jolly", <JollyPlans employees={employees} sites={sites} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} schedules={schedules} setSchedules={setSchedules} apiKeys={apiKeys} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/api-settings", <ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} />, ['Amministratore'])}
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </div>

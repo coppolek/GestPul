@@ -1,4 +1,4 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, AbsenceStatus, AbsenceType, SiteAssignment, Schedule, User } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, AbsenceStatus, AbsenceType, SiteAssignment, Schedule, User, ApiKey } from '../types';
 
 const SIMULATED_LATENCY = 500;
 
@@ -43,6 +43,10 @@ const initialUsers: User[] = [
     { id: 'user-3', username: 'mario.rossi', password: 'password', role: 'Lavoratore', employeeId: 'emp-1' },
 ];
 
+const initialApiKeys: ApiKey[] = [
+    { id: 'google_gemini', name: 'Google Gemini API Key', key: '' }
+];
+
 const ALL_INITIAL_DATA = {
     employees: initialEmployees,
     sites: initialSites,
@@ -50,6 +54,7 @@ const ALL_INITIAL_DATA = {
     sicknessRecords: initialSicknessRecords,
     schedules: initialSchedules,
     users: initialUsers,
+    apiKeys: initialApiKeys,
 }
 
 type DataKey = keyof typeof ALL_INITIAL_DATA;
