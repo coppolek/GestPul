@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Employee, WorkSite } from '../types';
 import { GoogleGenAI } from '@google/genai';
@@ -63,34 +62,43 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
             );
 
             const prompt = `
-                Sei un assistente per la pianificazione di un'impresa di pulizie. Il tuo compito è trovare gli operatori più adatti per un nuovo cantiere.
+                COMPITO: Trova gli operatori di pulizia disponibili più vicini a un nuovo cantiere.
 
-                **Informazioni sul nuovo cantiere:**
-                - Indirizzo: "${address}"
-                - Orario di lavoro richiesto: dalle ${startTime} alle ${endTime}
-                - Giorni di lavoro richiesti: ${workingDays.join(', ')}
+                DATI DI INPUT:
+                - Nuovo Cantiere:
+                  - Indirizzo: "${address}"
+                  - Orario: ${startTime} - ${endTime}
+                  - Giorni: ${workingDays.join(', ')}
+                - Tutti i Dipendenti: ${JSON.stringify(employeeDataForPrompt)}
+                - Assegnazioni Attuali: ${JSON.stringify(assignmentsDataForPrompt)}
 
-                **Lista di tutti i dipendenti:**
-                ${JSON.stringify(employeeDataForPrompt, null, 2)}
+                ISTRUZIONI:
+                1.  Identifica i dipendenti disponibili. Un dipendente NON è disponibile se ha una "Assegnazione Attuale" negli stessi giorni e con un orario che si sovrappone a quello del "Nuovo Cantiere".
+                2.  Per ogni dipendente DISPONIBILE, usa lo strumento Mappe per calcolare la distanza e il tempo di percorrenza in auto dal suo indirizzo all'indirizzo del "Nuovo Cantiere".
+                3.  Crea un array JSON contenente un oggetto per ogni dipendente disponibile.
+                4.  Ordina l'array finale per tempo di percorrenza (crescente).
 
-                **Lista di tutte le assegnazioni attuali dei dipendenti:**
-                ${JSON.stringify(assignmentsDataForPrompt, null, 2)}
+                REQUISITI DELL'OUTPUT:
+                - La risposta DEVE essere ESCLUSIVAMENTE un array JSON valido.
+                - NON includere testo, spiegazioni o formattazione markdown come \`\`\`json.
+                - Ogni oggetto nell'array deve avere le seguenti chiavi e tipi di valore:
+                  - "employeeId": string
+                  - "employeeName": string
+                  - "employeeAddress": string
+                  - "distance": string (es. "10.5 km")
+                  - "duration": string (es. "15 min")
+                - Se nessun dipendente è disponibile, restituisci un array vuoto: [].
 
-                **Istruzioni:**
-                1. **Verifica Disponibilità:** Per ogni dipendente, controlla se ha già un'assegnazione che si sovrappone con i giorni e gli orari richiesti per il nuovo cantiere. Un dipendente non è disponibile se è già impegnato. Considera le fasce orarie che si sovrappongono.
-                2. **Calcola Distanza:** Per tutti i dipendenti che risultano disponibili, usa gli strumenti a disposizione per calcolare la distanza e il tempo di percorrenza in auto dal loro indirizzo di casa all'indirizzo del nuovo cantiere.
-                3. **Crea una Lista Ordinata:** Restituisci una lista dei soli dipendenti disponibili, ordinata dal più vicino al più lontano (in base al tempo di percorrenza).
+                Esempio di un oggetto di output valido:
+                {
+                  "employeeId": "emp-3",
+                  "employeeName": "Giovanni Bianchi",
+                  "employeeAddress": "Via Torino 3, Napoli",
+                  "distance": "5.2 km",
+                  "duration": "8 min"
+                }
 
-                **Formato di Risposta:**
-                La tua intera risposta deve essere **SOLO ed esclusivamente** un array JSON valido. Non includere testo, spiegazioni, o marcatori di codice come \`\`\`json. La risposta deve iniziare con il carattere \`[\` e terminare con il carattere \`]\`.
-                L'array deve contenere oggetti, dove ogni oggetto rappresenta un dipendente disponibile e contiene le seguenti chiavi:
-                - "employeeId": (string) L'ID del dipendente.
-                - "employeeName": (string) Il nome completo del dipendente.
-                - "employeeAddress": (string) L'indirizzo di casa del dipendente.
-                - "distance": (string) La distanza stradale (es. "10.5 km").
-                - "duration": (string) Il tempo di percorrenza stimato in auto (es. "15 min").
-
-                Se nessun dipendente è disponibile o corrisponde ai criteri, restituisci un array JSON vuoto: [].
+                Inizia l'analisi e genera l'array JSON ora.
             `;
 
             const response = await ai.models.generateContent({
@@ -100,10 +108,19 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
                     tools: [{ googleMaps: {} }],
                 },
             });
+
+            if (response.promptFeedback?.blockReason) {
+                throw new Error(`La richiesta è stata bloccata: ${response.promptFeedback.blockReason}`);
+            }
             
             const responseText = response.text;
-            // Use a regex to find the first valid JSON array in the response text,
-            // as the model might occasionally add extra text before or after it.
+
+            if (!responseText) {
+                console.error("Invalid API response, no text content found:", JSON.stringify(response, null, 2));
+                throw new Error("La risposta del modello è vuota o non valida.");
+            }
+
+            // Find the JSON array within the response text, making it more robust
             const match = responseText.match(/(\[[\s\S]*?\])/);
 
             if (!match || !match[0]) {
