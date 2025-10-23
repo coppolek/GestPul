@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Assignment, Schedule, AbsenceStatus } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
 import * as api from '../services/api';
+import { GoogleGenAI } from '@google/genai';
 
 const ALL_WEEK_DAYS = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 
@@ -50,6 +51,8 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContext, setModalContext] = useState<ModalContext | null>(null);
     const [draggingOver, setDraggingOver] = useState<string | null>(null);
+    const [isPlanning, setIsPlanning] = useState(false);
+    const [planningError, setPlanningError] = useState<string | null>(null);
     
     // Debounce saving schedules
     useEffect(() => {
@@ -244,6 +247,121 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
             return newDate;
         });
     };
+
+    const handleAutoPlan = async () => {
+        setIsPlanning(true);
+        setPlanningError(null);
+
+        const uncoveredShifts = absentEmployeesThisWeek.flatMap(({ weeklyAssignments }) => 
+            Array.from(weeklyAssignments.entries()).flatMap(([day, assignments]) => {
+                const dateOfWeek = weekDates.find(d => dayFormatter.format(d) === day);
+                if (!dateOfWeek) return [];
+                const dateString = dateOfWeek.toISOString().split('T')[0];
+                return assignments.map(ass => {
+                    const [startTime, endTime] = ass.workingHours.split(' - ');
+                    return {
+                        neededOnDate: dateString,
+                        siteId: ass.siteId,
+                        siteName: ass.siteName,
+                        siteAddress: siteMap.get(ass.siteId)?.address || 'Indirizzo non trovato',
+                        startTime: startTime?.trim() || 'N/D',
+                        endTime: endTime?.trim() || 'N/D',
+                    };
+                });
+            })
+        );
+
+        if (uncoveredShifts.length === 0) {
+            setPlanningError("Non ci sono turni da coprire in questa settimana.");
+            setIsPlanning(false);
+            return;
+        }
+
+        if (jollyEmployees.length === 0) {
+            setPlanningError("Nessun operatore 'Jolly' disponibile per coprire le assenze.");
+            setIsPlanning(false);
+            return;
+        }
+
+        const jollyOperatorsForPrompt = jollyEmployees.map(e => ({
+            id: e.id,
+            name: `${e.firstName} ${e.lastName}`,
+            address: e.address,
+        }));
+        
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const prompt = `
+                Sei un esperto di logistica e pianificazione della forza lavoro per un'impresa di pulizie.
+                Il tuo compito è creare un programma settimanale ottimale per gli operatori "Jolly" per coprire i turni dei dipendenti assenti.
+
+                Devi seguire queste regole in ordine di priorità:
+                1.  Minimizza gli spostamenti: Assegna i turni all'operatore Jolly che vive più vicino al cantiere. Questa è la regola più importante. Crea percorsi giornalieri efficienti, raggruppando gli incarichi per un singolo operatore in cantieri geograficamente vicini tra loro.
+                2.  Distribuisci equamente il carico di lavoro: Distribuisci il numero totale di turni nel modo più uniforme possibile tra tutti gli operatori Jolly disponibili durante la settimana. Evita di sovraccaricare una persona se altre sono disponibili.
+                3.  Garantisci la copertura completa: Assicurati che ogni singolo turno scoperto sia assegnato a esattamente un operatore Jolly. Non lasciare nessun turno non assegnato.
+
+                DATI DI INPUT:
+                -   Operatori Jolly Disponibili: ${JSON.stringify(jollyOperatorsForPrompt)}
+                -   Turni da Coprire: ${JSON.stringify(uncoveredShifts)}
+
+                REQUISITI PER L'OUTPUT:
+                -   La tua risposta DEVE essere solo e soltanto un array JSON valido. Non includere testo, spiegazioni o formattazione markdown come \`\`\`json.
+                -   L'array JSON deve rappresentare i nuovi programmi per gli operatori Jolly.
+                -   Ogni elemento nell'array è un oggetto "Schedule" per un operatore Jolly.
+                -   La struttura di ogni oggetto Schedule deve essere:
+                    {
+                      "id": "string", // Un ID univoco per il programma, es. "sch-ai-{employeeId}"
+                      "employeeId": "string", // L'ID dell'operatore Jolly
+                      "label": "string", // Il nome completo dell'operatore Jolly
+                      "assignments": {
+                        // La chiave è la data in formato "YYYY-MM-DD"
+                        "YYYY-MM-DD": [
+                          {
+                            "id": "string", // Un ID univoco per l'incarico, es. "asg-ai-{timestamp}"
+                            "siteId": "string", // L'ID del cantiere
+                            "startTime": "string", // es. "08:00"
+                            "endTime": "string" // es. "17:00"
+                          }
+                        ]
+                      }
+                    }
+                -   Se non ci sono turni da coprire, restituisci un array vuoto [].
+
+                Analizza i dati di input e genera il programma ottimale nel formato JSON specificato.
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                },
+            });
+
+            const responseText = response.text;
+            if (!responseText) {
+                throw new Error("La risposta del modello è vuota.");
+            }
+            
+            const aiSchedules: Schedule[] = JSON.parse(responseText);
+            
+            const existingNonJollySchedules = schedules.filter(s => {
+                if (!s.employeeId) return true;
+                const emp = employees.find(e => e.id === s.employeeId);
+                return emp?.role !== 'Jolly';
+            });
+
+            setSchedules([...existingNonJollySchedules, ...aiSchedules]);
+
+        } catch (e) {
+            console.error("Errore durante la pianificazione automatica:", e);
+            const errorMessage = e instanceof Error ? e.message : "Errore sconosciuto.";
+            setPlanningError(`Pianificazione fallita: ${errorMessage}`);
+        } finally {
+            setIsPlanning(false);
+        }
+    };
     
     return (
         <div className="flex gap-8 h-full">
@@ -296,9 +414,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
             {/* Main scheduler */}
             <main className="flex-1">
                  <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex-1">
-                             <h2 className="text-2xl font-bold text-gray-800">Pianificazione Operatori Jolly</h2>
+                    <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                             <h2 className="text-2xl font-bold text-gray-800">Pianificazione Jolly</h2>
                         </div>
                         <div className="flex items-center space-x-4 flex-shrink-0">
                             <button onClick={() => changeWeek(-1)} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"><i className="fa-solid fa-chevron-left mr-2"></i> Prec</button>
@@ -307,12 +425,24 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                             </span>
                             <button onClick={() => changeWeek(1)} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Succ <i className="fa-solid fa-chevron-right ml-2"></i></button>
                         </div>
-                        <div className="flex-1 flex justify-end">
+                        <div className="flex-1 flex justify-end gap-2 min-w-[300px]">
+                            <button 
+                                onClick={handleAutoPlan} 
+                                disabled={isPlanning}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 flex items-center justify-center gap-2"
+                            >
+                                {isPlanning ? (
+                                    <><i className="fa-solid fa-spinner fa-spin"></i> Pianifico...</>
+                                ) : (
+                                    <><i className="fa-solid fa-wand-magic-sparkles"></i> Pianifica Automaticamente</>
+                                )}
+                            </button>
                             <button onClick={handleAddSchedule} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                                 <i className="fa-solid fa-plus mr-2"></i>Aggiungi Planner
                             </button>
                         </div>
                     </div>
+                    {planningError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{planningError}</div>}
                     
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
