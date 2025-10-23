@@ -67,7 +67,7 @@ const MainApp = () => {
             case '/absences/weekly': return 'Riepilogo Assenze Settimanali';
             case '/jolly': return 'Pianificazione Jolly';
             case '/api-settings': return 'Impostazioni API';
-            default: return 'Gestionale Cantieri';
+            default: return 'Coppolecchia';
         }
     };
 
@@ -114,7 +114,7 @@ const MainApp = () => {
         <div className="flex h-screen bg-white font-sans">
             <aside className="w-64 border-r flex flex-col bg-gray-50">
                 <div className="p-4 border-b">
-                    <h1 className="text-xl font-bold">Gestionale</h1>
+                    <h1 className="text-xl font-bold">Coppolecchia</h1>
                 </div>
                 <nav className="p-4 space-y-4 flex-1">
                     {visibleNavLinks.map((link, index) => {
