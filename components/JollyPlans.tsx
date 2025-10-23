@@ -71,7 +71,50 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
     const [isPlanning, setIsPlanning] = useState(false);
     const [planningError, setPlanningError] = useState<string | null>(null);
     const [conflicts, setConflicts] = useState<Set<string>>(new Set());
+
+    const jollyEmployees = useMemo(() => employees.filter(e => e.role === 'Jolly'), [employees]);
     
+    // Automatically sync planner rows with jolly employees list
+    useEffect(() => {
+        setSchedules(currentSchedules => {
+            const jollyIds = new Set(jollyEmployees.map(e => e.id));
+            const scheduleEmployeeIds = new Set(currentSchedules.map(s => s.employeeId).filter(Boolean));
+            let needsUpdate = false;
+    
+            // Remove planners for employees who are no longer Jolly
+            let updatedSchedules = currentSchedules.filter(s => s.employeeId && jollyIds.has(s.employeeId));
+            if (updatedSchedules.length !== currentSchedules.length) {
+                needsUpdate = true;
+            }
+    
+            // Add planners for new Jolly employees
+            jollyEmployees.forEach(jolly => {
+                if (!scheduleEmployeeIds.has(jolly.id)) {
+                    updatedSchedules.push({
+                        id: `sch-${jolly.id}`, // Deterministic ID
+                        employeeId: jolly.id,
+                        label: `${jolly.firstName} ${jolly.lastName}`,
+                        assignments: {},
+                    });
+                    needsUpdate = true;
+                }
+            });
+    
+            if (needsUpdate) {
+                // Sort the schedules by last name for consistent order
+                return updatedSchedules.sort((a, b) => {
+                    const empA = jollyEmployees.find(e => e.id === a.employeeId);
+                    const empB = jollyEmployees.find(e => e.id === b.employeeId);
+                    if (!empA || !empB) return 0;
+                    return empA.lastName.localeCompare(empB.lastName);
+                });
+            }
+    
+            return currentSchedules;
+        });
+    }, [jollyEmployees, setSchedules]);
+
+
     // Debounce saving schedules
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -113,38 +156,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
 
     const siteMap = useMemo(() => new Map(sites.map(site => [site.id, site])), [sites]);
     const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
-    const jollyEmployees = useMemo(() => employees.filter(e => e.role === 'Jolly'), [employees]);
 
-    const handleAddSchedule = () => {
-        const newSchedule: Schedule = {
-            id: `sch-${Date.now()}`,
-            employeeId: null,
-            label: 'Nuovo Planner',
-            assignments: {}
-        };
-        setSchedules(prev => [...prev, newSchedule]);
-    };
-
-    const handleRemoveSchedule = (scheduleId: string) => {
-        if (window.confirm('Sei sicuro di voler rimuovere questo planner?')) {
-            setSchedules(prev => prev.filter(s => s.id !== scheduleId));
-        }
-    };
-
-    const handleScheduleEmployeeChange = (scheduleId: string, employeeId: string) => {
-        const employee = employees.find(e => e.id === employeeId);
-        setSchedules(prev => prev.map(s => {
-            if (s.id === scheduleId) {
-                return {
-                    ...s,
-                    employeeId: employeeId || null,
-                    label: employee ? `${employee.firstName} ${employee.lastName}` : 'Seleziona operatore'
-                };
-            }
-            return s;
-        }));
-    };
-    
     const getAbsenceForEmployeeOnDate = useCallback((employeeId: string, date: Date) => {
         const dateStr = date.toISOString().split('T')[0];
         
@@ -491,9 +503,6 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                                     <><i className="fa-solid fa-wand-magic-sparkles"></i> Pianifica Automaticamente</>
                                 )}
                             </button>
-                            <button onClick={handleAddSchedule} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                                <i className="fa-solid fa-plus mr-2"></i>Aggiungi Planner
-                            </button>
                         </div>
                     </div>
                      {planningError && (
@@ -535,9 +544,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
                             </thead>
                              <tbody>
                                 {schedules.map((schedule, index) => {
-                                    const availableJolly = jollyEmployees.filter(e => 
-                                        !schedules.some(s => s.employeeId === e.id && s.id !== schedule.id)
-                                    );
+                                    const operator = jollyEmployees.find(e => e.id === schedule.employeeId);
                                     const weeklyTotalHours = weekDates.reduce((total, date) => {
                                         const dateString = date.toISOString().split('T')[0];
                                         const dayAssignments = schedule.assignments[dateString] || [];
@@ -547,25 +554,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({ employees, sites, leaveRequests
 
                                     return (
                                     <tr key={schedule.id} className="h-full">
-                                        <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 w-52 align-top">
-                                            <div className="flex items-start gap-2">
-                                                <select
-                                                    value={schedule.employeeId || ''}
-                                                    onChange={(e) => handleScheduleEmployeeChange(schedule.id, e.target.value)}
-                                                    className="w-full p-1 border border-gray-300 rounded-lg text-sm"
-                                                >
-                                                    <option value="">Seleziona...</option>
-                                                    {availableJolly.map(emp => (
-                                                        <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
-                                                    ))}
-                                                </select>
-                                                <button 
-                                                    onClick={() => handleRemoveSchedule(schedule.id)}
-                                                    className="text-red-500 hover:text-red-700 p-1 flex-shrink-0"
-                                                    title="Rimuovi planner"
-                                                >
-                                                    <i className="fa-solid fa-trash-alt"></i>
-                                                </button>
+                                        <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white z-10 w-52 align-top">
+                                            <div className="font-bold text-sm">
+                                                {operator ? `${operator.firstName} ${operator.lastName}` : 'N/A'}
                                             </div>
                                         </td>
                                         {weekDates.map(date => {
