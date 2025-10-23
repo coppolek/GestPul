@@ -12,6 +12,7 @@ import WeeklyAbsences from './components/absences/WeeklyAbsences';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import { Role } from './types';
+import FindOperators from './components/FindOperators';
 
 // --- Navigation Components ---
 
@@ -58,6 +59,7 @@ const MainApp = () => {
             case '/': return 'Dashboard';
             case '/employees': return 'Anagrafica Dipendenti';
             case '/sites': return 'Gestione Cantieri';
+            case '/find-operators': return 'Cerca Operatori';
             case '/users': return 'Gestione Utenti';
             case '/absences/requests': return 'Richieste Ferie e Permessi';
             case '/absences/sickness': return 'Gestione Malattie';
@@ -71,6 +73,7 @@ const MainApp = () => {
         { to: '/', icon: 'fa-chart-pie', text: 'Dashboard', roles: ['Amministratore', 'Responsabile'] },
         { to: '/employees', icon: 'fa-users', text: 'Dipendenti', roles: ['Amministratore', 'Responsabile'] },
         { to: '/sites', icon: 'fa-building-user', text: 'Cantieri', roles: ['Amministratore', 'Responsabile'] },
+        { to: '/find-operators', icon: 'fa-magnifying-glass-location', text: 'Cerca Operatori', roles: ['Amministratore', 'Responsabile'] },
         { to: '/users', icon: 'fa-user-shield', text: 'Utenti', roles: ['Amministratore'] },
         { type: 'accordion', icon: 'fa-person-walking', title: 'Assenze', roles: ['Amministratore', 'Responsabile'], children: [
             { to: '/absences/requests', text: 'Richieste' },
@@ -138,6 +141,7 @@ const MainApp = () => {
                         {renderRoute("/", <Dashboard employees={employees} sites={sites} />, ['Amministratore', 'Responsabile', 'Lavoratore'])}
                         {renderRoute("/employees", <EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/sites", <SiteList sites={sites} setSites={setSites} employees={employees} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/users", <UserList users={users} setUsers={setUsers} employees={employees} />, ['Amministratore'])}
                         {renderRoute("/absences/requests", <LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/sickness", <Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />, ['Amministratore', 'Responsabile'])}
