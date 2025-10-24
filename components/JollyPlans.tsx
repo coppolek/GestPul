@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
 import * as api from '../services/api';
 import { GoogleGenAI } from '@google/genai';
@@ -43,6 +43,7 @@ interface JollyPlansProps {
     sicknessRecords: SicknessRecord[];
     schedules: Schedule[];
     setSchedules: React.Dispatch<React.SetStateAction<Schedule[]>>;
+    apiKeys: ApiKey[];
 }
 
 const JollyPlans: React.FC<JollyPlansProps> = ({
@@ -52,6 +53,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     sicknessRecords,
     schedules,
     setSchedules,
+    apiKeys,
 }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,6 +63,8 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     const [manualPlanners, setManualPlanners] = useState<Schedule[]>([]);
     const [draggedItem, setDraggedItem] = useState<{ type: 'assignment' | 'absence'; data: any; sourceInfo?: any } | null>(null);
     const [isPlanDropdownOpen, setIsPlanDropdownOpen] = useState(false);
+
+    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
 
     const handleOpenModal = (scheduleId: string, date: string, assignment?: Assignment) => {
         setModalContext({ scheduleId, date, assignment });
@@ -323,9 +327,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     };
     
     const handleAutoPlanAI = async () => {
-        // FIX: Use environment variable for API key according to guidelines.
-        const geminiApiKey = process.env.API_KEY;
-        if (!geminiApiKey) throw new Error("Chiave API Gemini non configurata nell'ambiente.");
+        if (!geminiApiKey) {
+            throw new Error("Chiave API Gemini non configurata. Vai su Impostazioni API.");
+        }
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
         const prompt = `

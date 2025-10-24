@@ -145,16 +145,13 @@ const MainApp = () => {
                         {renderRoute("/", <Dashboard employees={employees} sites={sites} />, ['Amministratore', 'Responsabile', 'Lavoratore'])}
                         {renderRoute("/employees", <EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/sites", <SiteList sites={sites} setSites={setSites} employees={employees} />, ['Amministratore', 'Responsabile'])}
-                        {/* FIX: Removed `apiKeys` prop to comply with guideline of using environment variables for API keys. */}
-                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} apiKeys={apiKeys} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/users", <UserList users={users} setUsers={setUsers} employees={employees} />, ['Amministratore'])}
                         {renderRoute("/absences/requests", <LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/sickness", <Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/weekly", <WeeklyAbsences employees={employees} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} />, ['Amministratore', 'Responsabile'])}
-                        {/* FIX: Removed `apiKeys` prop to comply with guideline of using environment variables for API keys. */}
-                        {renderRoute("/jolly", <JollyPlans employees={employees} sites={sites} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} schedules={schedules} setSchedules={setSchedules} />, ['Amministratore', 'Responsabile'])}
-                        {/* FIX: Removed `apiKeys` and `setApiKeys` props as API key is now read from environment variables. */}
-                        {renderRoute("/api-settings", <ApiSettings />, ['Amministratore'])}
+                        {renderRoute("/jolly", <JollyPlans employees={employees} sites={sites} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} schedules={schedules} setSchedules={setSchedules} apiKeys={apiKeys} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/api-settings", <ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} />, ['Amministratore'])}
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </div>

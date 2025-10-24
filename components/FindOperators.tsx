@@ -1,11 +1,13 @@
 
-import React, { useState } from 'react';
-import { Employee, WorkSite } from '../types';
+
+import React, { useState, useMemo } from 'react';
+import { Employee, WorkSite, ApiKey } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 interface FindOperatorsProps {
     employees: Employee[];
     sites: WorkSite[];
+    apiKeys: ApiKey[];
 }
 
 interface SearchResult {
@@ -13,7 +15,7 @@ interface SearchResult {
     distance: string;
 }
 
-const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
+const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys }) => {
     const [address, setAddress] = useState('');
     const [workingHours, setWorkingHours] = useState('08:00 - 12:00');
     const [workingDays, setWorkingDays] = useState<string[]>([]);
@@ -22,6 +24,8 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchPerformed, setSearchPerformed] = useState(false);
+
+    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
 
     const handleDayToggle = (day: string) => {
         setWorkingDays(prev => 
@@ -35,10 +39,8 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
         setResults([]);
         setSearchPerformed(true);
 
-        // FIX: Use environment variable for API key according to guidelines.
-        const geminiApiKey = process.env.API_KEY;
         if (!geminiApiKey) {
-            setError("Chiave API Gemini non configurata nell'ambiente.");
+            setError("Chiave API Gemini non configurata. Vai su Impostazioni API per aggiungerla.");
             setIsLoading(false);
             return;
         }
@@ -106,11 +108,11 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
             const parsedResults: SearchResult[] = JSON.parse(jsonMatch[0]);
 
             const employeeMap = new Map(employees.map(e => [e.id, e]));
-            // FIX: Rewrote map function to use an if-statement, resolving the "Spread types may only be created from object types" error by ensuring proper type narrowing.
             const finalResults = parsedResults.map(res => {
                 const employee = employeeMap.get(res.employeeId);
                 if (employee) {
-                    return { ...employee, distance: res.distance };
+                    // FIX: Replaced object spread with Object.assign to fix "Spread types may only be created from object types" error.
+                    return Object.assign({}, employee, { distance: res.distance });
                 }
                 return null;
             }).filter((res): res is Employee & { distance: string } => res !== null);
