@@ -1,34 +1,27 @@
+
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Employee, WorkSite, ApiKey } from '../types';
+import { Employee, WorkSite } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
-// Interface for the structured JSON response from Gemini
-interface OperatorSearchResult {
-    employeeId: string;
-    employeeName: string;
-    employeeAddress: string;
-    distance: string;
-    duration: string;
-}
-
 interface FindOperatorsProps {
-  employees: Employee[];
-  sites: WorkSite[];
-  apiKeys: ApiKey[];
+    employees: Employee[];
+    sites: WorkSite[];
 }
 
-const ALL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+interface SearchResult {
+    employeeId: string;
+    distance: string;
+}
 
-const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys }) => {
+const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
     const [address, setAddress] = useState('');
-    const [startTime, setStartTime] = useState('08:00');
-    const [endTime, setEndTime] = useState('17:00');
+    const [workingHours, setWorkingHours] = useState('08:00 - 12:00');
     const [workingDays, setWorkingDays] = useState<string[]>([]);
     
+    const [results, setResults] = useState<(Employee & { distance: string })[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [results, setResults] = useState<OperatorSearchResult[] | null>(null);
+    const [searchPerformed, setSearchPerformed] = useState(false);
 
     const handleDayToggle = (day: string) => {
         setWorkingDays(prev => 
@@ -37,78 +30,61 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
     };
 
     const handleSearch = async () => {
-        const geminiApiKey = apiKeys.find(k => k.id === 'google_gemini')?.key;
-        if (!geminiApiKey) {
-            setError("La chiave API di Google Gemini non è stata impostata. Vai su Impostazioni API per configurarla.");
-            return;
-        }
-
-        if (!address || workingDays.length === 0) {
-            setError("Per favore, inserisci l'indirizzo del cantiere e seleziona almeno un giorno di lavoro.");
-            return;
-        }
-
         setIsLoading(true);
         setError(null);
-        setResults(null);
+        setResults([]);
+        setSearchPerformed(true);
+
+        // FIX: Use environment variable for API key according to guidelines.
+        const geminiApiKey = process.env.API_KEY;
+        if (!geminiApiKey) {
+            setError("Chiave API Gemini non configurata nell'ambiente.");
+            setIsLoading(false);
+            return;
+        }
+        if (!address.trim()) {
+            setError("L'indirizzo del cantiere è obbligatorio per calcolare la distanza.");
+            setIsLoading(false);
+            return;
+        }
+
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const allAssignments = sites.flatMap(site => site.assignments);
+        const employeeData = employees.map(emp => ({
+            id: emp.id,
+            name: `${emp.firstName} ${emp.lastName}`,
+            address: emp.address,
+            assignments: allAssignments
+                .filter(a => a.employeeId === emp.id)
+                .map(a => ({ workingHours: a.workingHours, workingDays: a.workingDays }))
+        }));
+
+        const prompt = `
+            TASK: Identify available cleaning operators and calculate their distance to a new worksite.
+
+            RULES:
+            1. An operator is UNAVAILABLE if they have an existing assignment that overlaps with the requested work schedule (days and time).
+            2. For each AVAILABLE operator, calculate the driving distance in kilometers from their home address to the new worksite address.
+            3. The final output must be a JSON array of objects, sorted by distance (closest first).
+            4. Each object must contain 'employeeId' and 'distance' (as a string, e.g., "15.3 km").
+            5. If no operators are available, return an empty array [].
+            6. The entire response must be ONLY the JSON array. Do not include any explanatory text or markdown formatting.
+
+            INPUT DATA:
+            - New Worksite Address: "${address}"
+            - Requested Schedule:
+              - Days: ${JSON.stringify(workingDays)}
+              - Hours: "${workingHours}"
+            - Operator Data: ${JSON.stringify(employeeData)}
+
+            OUTPUT FORMAT (JSON ARRAY ONLY):
+            [
+              { "employeeId": "emp-1", "distance": "5.2 km" },
+              { "employeeId": "emp-4", "distance": "12.8 km" }
+            ]
+        `;
 
         try {
-            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-
-            const employeeDataForPrompt = employees.map(emp => ({
-                id: emp.id,
-                name: `${emp.firstName} ${emp.lastName}`,
-                address: emp.address
-            }));
-            
-            const assignmentsDataForPrompt = sites.flatMap(site => 
-                site.assignments.map(ass => ({
-                    employeeId: ass.employeeId,
-                    workingDays: ass.workingDays,
-                    workingHours: ass.workingHours
-                }))
-            );
-
-            const prompt = `
-                COMPITO: Trova gli operatori di pulizia disponibili più vicini a un nuovo cantiere.
-
-                DATI DI INPUT:
-                - Nuovo Cantiere:
-                  - Indirizzo: "${address}"
-                  - Orario: ${startTime} - ${endTime}
-                  - Giorni: ${workingDays.join(', ')}
-                - Tutti i Dipendenti: ${JSON.stringify(employeeDataForPrompt)}
-                - Assegnazioni Attuali: ${JSON.stringify(assignmentsDataForPrompt)}
-
-                ISTRUZIONI:
-                1.  Identifica i dipendenti disponibili. Un dipendente NON è disponibile se ha una "Assegnazione Attuale" negli stessi giorni e con un orario che si sovrappone a quello del "Nuovo Cantiere".
-                2.  Per ogni dipendente DISPONIBILE, usa lo strumento Mappe per calcolare la distanza e il tempo di percorrenza in auto dal suo indirizzo all'indirizzo del "Nuovo Cantiere".
-                3.  Crea un array JSON contenente un oggetto per ogni dipendente disponibile.
-                4.  Ordina l'array finale per tempo di percorrenza (crescente).
-
-                REQUISITI DELL'OUTPUT:
-                - La risposta DEVE essere ESCLUSIVAMENTE un array JSON valido.
-                - NON includere testo, spiegazioni o formattazione markdown come \`\`\`json.
-                - Ogni oggetto nell'array deve avere le seguenti chiavi e tipi di valore:
-                  - "employeeId": string
-                  - "employeeName": string
-                  - "employeeAddress": string
-                  - "distance": string (es. "10.5 km")
-                  - "duration": string (es. "15 min")
-                - Se nessun dipendente è disponibile, restituisci un array vuoto: [].
-
-                Esempio di un oggetto di output valido:
-                {
-                  "employeeId": "emp-3",
-                  "employeeName": "Giovanni Bianchi",
-                  "employeeAddress": "Via Torino 3, Napoli",
-                  "distance": "5.2 km",
-                  "duration": "8 min"
-                }
-
-                Inizia l'analisi e genera l'array JSON ora.
-            `;
-
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-pro',
                 contents: prompt,
@@ -116,196 +92,141 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
                     tools: [{ googleMaps: {} }],
                 },
             });
-
-            if (response.promptFeedback?.blockReason) {
-                throw new Error(`La richiesta è stata bloccata: ${response.promptFeedback.blockReason}`);
-            }
             
-            const responseText = response.text;
-
-            if (!responseText) {
-                console.error("Invalid API response, no text content found:", JSON.stringify(response, null, 2));
+            const text = response.text;
+            if (!text) {
                 throw new Error("La risposta del modello è vuota o non valida.");
             }
 
-            // Find the JSON array within the response text, making it more robust
-            const match = responseText.match(/(\[[\s\S]*?\])/);
-
-            if (!match || !match[0]) {
-                console.error("Invalid response format, no JSON array found:", responseText);
-                throw new Error("La risposta del modello non è nel formato previsto. Risposta ricevuta: " + responseText);
+            const jsonMatch = text.match(/\[.*\]/s);
+            if (!jsonMatch) {
+                console.error("Invalid JSON response:", text);
+                throw new Error("La risposta del modello non è un JSON valido.");
             }
+            const parsedResults: SearchResult[] = JSON.parse(jsonMatch[0]);
 
-            try {
-                const searchResults: OperatorSearchResult[] = JSON.parse(match[0]);
-                setResults(searchResults);
-            } catch (parseError) {
-                console.error("Failed to parse extracted JSON:", match[0], parseError);
-                throw new Error("Formato JSON non valido ricevuto dal modello.");
-            }
+            const employeeMap = new Map(employees.map(e => [e.id, e]));
+            // FIX: Rewrote map function to use an if-statement, resolving the "Spread types may only be created from object types" error by ensuring proper type narrowing.
+            const finalResults = parsedResults.map(res => {
+                const employee = employeeMap.get(res.employeeId);
+                if (employee) {
+                    return { ...employee, distance: res.distance };
+                }
+                return null;
+            }).filter((res): res is Employee & { distance: string } => res !== null);
+            
+            setResults(finalResults);
 
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error calling Gemini API:", e);
-            const errorMessage = e instanceof Error ? e.message : "Si è verificato un errore sconosciuto.";
-            setError(`Si è verificato un errore durante la ricerca. Dettagli: ${errorMessage}`);
+            setError(`Errore durante la ricerca con AI: ${e.message || 'Dettagli non disponibili.'}`);
         } finally {
             setIsLoading(false);
         }
     };
-
-
+    
+    const ALL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+    
     return (
-        <div className="space-y-8">
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Cerca Operatore Disponibile</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
-                    {/* Column 1: Address */}
-                    <div className="lg:col-span-3">
-                        <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Indirizzo nuovo cantiere</label>
-                        <div className="relative">
-                            <i className="fa-solid fa-map-marker-alt absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input
-                                type="text"
-                                id="address"
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                                placeholder="Es. Via Roma 1, 20121 Milano MI"
-                                className="w-full p-2 pl-10 border border-gray-300 rounded-lg"
-                            />
-                        </div>
-                    </div>
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Cerca Operatori Vicini</h2>
+            <p className="text-gray-600 mb-6">
+                Inserisci i dettagli del nuovo cantiere per trovare gli operatori disponibili più vicini.
+            </p>
 
-                    {/* Column 2: Time */}
-                    <div className="grid grid-cols-2 gap-4">
-                         <div>
-                            <label htmlFor="start-time" className="block text-sm font-medium text-gray-700 mb-1">Dalle ore</label>
-                            <input
-                                type="time"
-                                id="start-time"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded-lg"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="end-time" className="block text-sm font-medium text-gray-700 mb-1">Alle ore</label>
-                            <input
-                                type="time"
-                                id="end-time"
-                                value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded-lg"
-                            />
-                        </div>
-                    </div>
-                   
-                    {/* Column 3: Days */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Giorni di lavoro</label>
-                        <div className="flex flex-wrap gap-2">
-                            {ALL_DAYS.map(day => (
-                                <button
-                                    key={day}
-                                    onClick={() => handleDayToggle(day)}
-                                    className={`px-3 py-1 text-sm rounded-full border transition-colors ${
-                                        workingDays.includes(day)
-                                        ? 'bg-blue-600 text-white border-blue-600'
-                                        : 'bg-white hover:bg-gray-100 border-gray-300'
-                                    }`}
-                                >
-                                    {day.substring(0, 3)}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Column 4: Button */}
-                    <div className="flex justify-end">
-                        <button
-                            onClick={handleSearch}
-                            disabled={isLoading}
-                            className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <i className="fa-solid fa-spinner fa-spin"></i>
-                                    <span>Ricerca...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <i className="fa-solid fa-magnifying-glass"></i>
-                                    <span>Cerca Operatori</span>
-                                </>
-                            )}
-                        </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 border rounded-lg bg-gray-50">
+                 <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo del nuovo cantiere</label>
+                    <input
+                        type="text"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Es. Via Roma 1, Milano"
+                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        disabled={isLoading}
+                        required
+                    />
+                </div>
+                <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Fascia oraria richiesta (es. 08:00-17:00)</label>
+                    <input
+                        type="text"
+                        value={workingHours}
+                        onChange={(e) => setWorkingHours(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        disabled={isLoading}
+                    />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Giorni di lavoro richiesti</label>
+                    <div className="flex flex-wrap gap-2">
+                        {ALL_DAYS.map(day => (
+                            <button
+                                key={day}
+                                onClick={() => handleDayToggle(day)}
+                                disabled={isLoading}
+                                className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                                    workingDays.includes(day)
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white hover:bg-gray-100 border-gray-300'
+                                }`}
+                            >
+                                {day}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Results section */}
-            <div id="results">
-                 {error && (
-                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert">
-                        <p className="font-bold">Errore</p>
-                        <p>
-                            {error.includes("Impostazioni API") ? (
-                                <>
-                                    {error}
-                                    <NavLink to="/api-settings" className="font-bold underline hover:text-red-900 ml-1">
-                                        Vai alle impostazioni.
-                                    </NavLink>
-                                </>
-                            ) : (
-                                error
-                            )}
-                        </p>
-                    </div>
-                )}
-                
-                {isLoading && (
-                     <div className="text-center py-10">
-                        <i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i>
-                        <p className="mt-4 text-gray-600">Analisi disponibilità e calcolo distanze in corso...</p>
-                    </div>
-                )}
-                
-                {!isLoading && results && (
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">
-                            Risultati della Ricerca ({results.length} {results.length === 1 ? 'operatore trovato' : 'operatori trovati'})
-                        </h3>
-                        {results.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {results.map(res => (
-                                    <div key={res.employeeId} className="bg-white p-5 rounded-xl shadow-lg border-l-4 border-green-500">
-                                        <h4 className="text-lg font-bold text-gray-900">{res.employeeName}</h4>
-                                        <p className="text-sm text-gray-500 mt-1 mb-3 flex items-center gap-2">
-                                            <i className="fa-solid fa-location-dot text-gray-400"></i>
-                                            {res.employeeAddress}
-                                        </p>
-                                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                            <div className="text-center">
-                                                <p className="text-xs text-gray-500">Distanza</p>
-                                                <p className="font-bold text-gray-800">{res.distance}</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-xs text-gray-500">Tempo</p>
-                                                <p className="font-bold text-gray-800">{res.duration}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                             <div className="text-center py-10 bg-gray-50 rounded-lg">
-                                <i className="fa-solid fa-user-slash text-4xl text-gray-400"></i>
-                                <p className="mt-4 text-gray-600 font-semibold">Nessun operatore disponibile</p>
-                                <p className="text-sm text-gray-500">Prova a modificare i giorni, l'orario o cerca per un altro cantiere.</p>
-                            </div>
-                        )}
-                    </div>
-                )}
+             <div className="text-right">
+                <button
+                    onClick={handleSearch}
+                    disabled={isLoading || workingDays.length === 0 || !address.trim()}
+                    className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-w-[150px]"
+                >
+                    {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-map-location-dot mr-2"></i>Cerca</>}
+                </button>
             </div>
+            
+            {error && <div className="mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">{error}</div>}
+            
+            {isLoading && (
+                <div className="mt-8 text-center p-6">
+                    <i className="fa-solid fa-spinner fa-spin text-3xl text-blue-600"></i>
+                    <p className="mt-2 text-gray-600">Analisi disponibilità e calcolo distanze in corso...</p>
+                </div>
+            )}
+
+            {!isLoading && searchPerformed && results.length > 0 && (
+                 <div className="mt-8">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Risultati: Operatori Disponibili Ordinati per Vicinanza</h3>
+                    <div className="space-y-4">
+                        {results.map((result) => (
+                             <div key={result.id} className="p-4 border rounded-lg bg-gray-50 flex items-center gap-4">
+                               <div className="flex-shrink-0 w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center">
+                                    <i className="fa-solid fa-user-check text-xl"></i>
+                               </div>
+                               <div className="flex-grow">
+                                    <p className="font-bold text-lg text-gray-800">{result.firstName} {result.lastName}</p>
+                                    <p className="text-sm text-gray-600">{result.address}</p>
+                               </div>
+                               <div className="ml-auto text-right flex-shrink-0">
+                                   <p className="font-bold text-xl text-blue-600">{result.distance}</p>
+                                   <p className="text-xs text-gray-500">Distanza</p>
+                               </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            
+            {!isLoading && searchPerformed && results.length === 0 && (
+                <div className="mt-8 text-center p-6 border-2 border-dashed rounded-lg">
+                    <i className="fa-solid fa-user-slash text-4xl text-gray-400 mb-3"></i>
+                    <p className="text-gray-600 font-semibold">Nessun operatore disponibile</p>
+                    <p className="text-gray-500">Nessun operatore è stato trovato per i criteri di data e orario specificati.</p>
+                </div>
+            )}
         </div>
     );
 };
