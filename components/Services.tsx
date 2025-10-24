@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import * as api from '../services/api';
@@ -89,51 +90,74 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
         setIsSaving(true);
         try {
             const employeeNameMap = new Map(employees.map(e => [`${e.lastName} ${e.firstName}`.toLowerCase(), e.id]));
-            // FIX: Explicitly type the Map to prevent type inference issues.
-            const siteNameMap = new Map<string, WorkSite>(sites.map(s => [s.name.toLowerCase(), s]));
-
-            const updatedSitesMap = new Map<string, WorkSite>();
-
+            const siteNameMap = new Map(sites.map(s => [s.name.toLowerCase(), s]));
+    
+            // Group all new assignments by siteId -> employeeId
+            const groupedNewAssignments = new Map<string, Map<string, SiteAssignment[]>>();
+            
             for (const service of services) {
                 const site = siteNameMap.get(service.siteName.toLowerCase());
+                // The employee name in the CSV might be "LAST FIRST"
                 const employeeId = employeeNameMap.get(service.employeeName.toLowerCase());
-
+    
                 if (site && employeeId) {
-                    const currentSiteState = updatedSitesMap.get(site.id) || site;
-                    
-                    if (!currentSiteState.assignments.some(a => a.employeeId === employeeId)) {
-                        const newAssignment: SiteAssignment = {
-                            employeeId: employeeId,
-                            workingHours: service.workingHours,
-                            workingDays: service.workingDays,
-                        };
-                        const updatedAssignments = [...currentSiteState.assignments, newAssignment];
-                        updatedSitesMap.set(site.id, { ...currentSiteState, assignments: updatedAssignments });
+                    if (!groupedNewAssignments.has(site.id)) {
+                        groupedNewAssignments.set(site.id, new Map());
                     }
+                    const siteGroup = groupedNewAssignments.get(site.id)!;
+                    
+                    if (!siteGroup.has(employeeId)) {
+                        siteGroup.set(employeeId, []);
+                    }
+                    const employeeGroup = siteGroup.get(employeeId)!;
+    
+                    employeeGroup.push({
+                        employeeId,
+                        workingHours: service.workingHours,
+                        workingDays: service.workingDays,
+                    });
                 }
             }
             
-            const sitesToUpdate = Array.from(updatedSitesMap.values());
+            const sitesToUpdate: WorkSite[] = [];
+            
+            // Iterate through sites that have new assignments
+            for (const [siteId, employeeAssignmentsMap] of groupedNewAssignments.entries()) {
+                const originalSite = sites.find(s => s.id === siteId)!;
+                let newAssignmentsForSite = [...originalSite.assignments];
+                
+                // For each employee with new assignments, remove their old ones and add the new ones
+                for (const [employeeId, newAssignments] of employeeAssignmentsMap.entries()) {
+                    // Overwrite logic: remove all previous assignments for this employee on this site
+                    newAssignmentsForSite = newAssignmentsForSite.filter(a => a.employeeId !== employeeId);
+                    // Add the new assignments from the file
+                    newAssignmentsForSite.push(...newAssignments);
+                }
+                
+                sitesToUpdate.push({ ...originalSite, assignments: newAssignmentsForSite });
+            }
+    
             if (sitesToUpdate.length > 0) {
-                // FIX: Explicitly provide the generic type to `api.updateData` to ensure `updatedSitesResults` is correctly typed as `WorkSite[]`.
-                const updatedSitesResults = await Promise.all(sitesToUpdate.map(site => api.updateData<WorkSite>('sites', site.id, site)));
+                // FIX: Explicitly type `updatedSitesResults` to `WorkSite[]` to resolve type inference issues with `Promise.all`.
+                const updatedSitesResults: WorkSite[] = await Promise.all(
+                    sitesToUpdate.map(site => api.updateData<WorkSite>('sites', site.id, site))
+                );
                 
                 setSites(prevSites => {
-                    const newSites = [...prevSites];
+                    const newSitesState = [...prevSites];
                     updatedSitesResults.forEach(updatedSite => {
-                        const index = newSites.findIndex(s => s.id === updatedSite.id);
+                        const index = newSitesState.findIndex(s => s.id === updatedSite.id);
                         if (index !== -1) {
-                            newSites[index] = updatedSite;
+                            newSitesState[index] = updatedSite;
                         }
                     });
-                    return newSites;
+                    return newSitesState;
                 });
             }
-
             handleCloseModals();
         } catch (error) {
             console.error("Failed to import services", error);
-            alert("Importazione fallita. Controlla i dati nel file.");
+            alert("Importazione fallita. Controlla la corrispondenza dei nomi nel file.");
         } finally {
             setIsSaving(false);
         }
@@ -203,7 +227,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                                     </thead>
                                     <tbody>
                                         {site.assignments.map(assignment => (
-                                            <tr key={assignment.employeeId} className="border-b hover:bg-gray-50">
+                                            <tr key={assignment.employeeId + assignment.workingHours} className="border-b hover:bg-gray-50">
                                                 <td className="p-2 font-medium text-gray-800">{employeeMap.get(assignment.employeeId) || 'N/A'}</td>
                                                 <td className="p-2 text-gray-600">{assignment.workingHours}</td>
                                                 <td className="p-2 text-gray-600">{assignment.workingDays.join(', ')}</td>
