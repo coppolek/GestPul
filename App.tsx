@@ -73,7 +73,7 @@ const MainLayout: React.FC = () => {
                         <Route path="/" element={<Dashboard employees={employees} sites={sites} />} />
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
-                        <Route path="/servizi" element={<Services sites={sites} employees={employees} />} />
+                        <Route path="/servizi" element={<Services sites={sites} setSites={setSites} employees={employees} />} />
                         
                         <Route path="/assenze" element={<Navigate to="/assenze/richieste" />} />
                         <Route path="/assenze/richieste" element={<LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />} />

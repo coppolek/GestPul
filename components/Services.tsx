@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { WorkSite, Employee } from '../types';
+import { WorkSite, Employee, SiteAssignment } from '../types';
+import ServiceImportModal from './modals/ServiceImportModal';
+import * as api from '../services/api';
+
 
 // Helper per ottenere le date della settimana
 const getWeekDates = (currentDate: Date): Date[] => {
@@ -23,12 +26,15 @@ const weekDayLongFormatter = new Intl.DateTimeFormat('it-IT', { weekday: 'long' 
 
 interface ServicesProps {
   sites: WorkSite[];
+  setSites: React.Dispatch<React.SetStateAction<WorkSite[]>>;
   employees: Employee[];
 }
 
-const Services: React.FC<ServicesProps> = ({ sites, employees }) => {
+const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [searchTerm, setSearchTerm] = useState('');
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
     const employeeMap = useMemo(() => new Map(employees.map(emp => [emp.id, `${emp.firstName} ${emp.lastName}`])), [employees]);
@@ -50,76 +56,156 @@ const Services: React.FC<ServicesProps> = ({ sites, employees }) => {
     
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+    const handleImportServices = async (importedData: { siteName: string; employeeName: string; workingHours: string; workingDays: string[] }[]) => {
+        setIsSaving(true);
+        try {
+            const employeeMapByName = new Map(employees.map(e => [`${e.lastName} ${e.firstName}`.toLowerCase(), e.id]));
+            const siteMapByName = new Map(sites.map(s => [s.name.toLowerCase(), s]));
+            const siteUpdates = new Map<string, WorkSite>();
+
+            for (const item of importedData) {
+                const employeeId = employeeMapByName.get(item.employeeName.toLowerCase());
+                const site = siteMapByName.get(item.siteName.toLowerCase());
+
+                if (employeeId && site) {
+                    // Fix: Add explicit type assertion for `site` to resolve 'unknown' type error.
+                    const currentSite = site as WorkSite;
+                    let updatedSite = siteUpdates.get(currentSite.id) || { ...currentSite, assignments: [...currentSite.assignments] };
+                    
+                    const assignmentExists = updatedSite.assignments.some(
+                        a => a.employeeId === employeeId && 
+                             a.workingHours === item.workingHours && 
+                             JSON.stringify(a.workingDays.sort()) === JSON.stringify(item.workingDays.sort())
+                    );
+
+                    if (!assignmentExists) {
+                        // Fix: Create the new assignment object with explicit types to ensure correctness.
+                        const newAssignment: SiteAssignment = {
+                            employeeId: employeeId,
+                            workingHours: item.workingHours,
+                            workingDays: item.workingDays,
+                        };
+                        updatedSite.assignments.push(newAssignment);
+                        siteUpdates.set(currentSite.id, updatedSite);
+                    }
+                } else {
+                     console.warn(`Impossibile trovare il dipendente "${item.employeeName}" o il cantiere "${item.siteName}". Riga saltata.`);
+                }
+            }
+            
+            if (siteUpdates.size === 0) {
+                alert("Nessun nuovo servizio da importare. I dati potrebbero essere già presenti o non validi.");
+                setIsImportModalOpen(false);
+                return;
+            }
+
+            const updatePromises = Array.from(siteUpdates.values()).map(updatedSite => 
+                api.updateData<WorkSite>('sites', updatedSite.id, updatedSite)
+            );
+            
+            const updatedSitesResults = await Promise.all(updatePromises);
+            
+            setSites(currentSites => {
+                const updatedSitesMap = new Map(updatedSitesResults.map(s => [s.id, s]));
+                return currentSites.map(s => updatedSitesMap.get(s.id) || s);
+            });
+
+            setIsImportModalOpen(false);
+            alert(`${updatedSitesResults.length} cantier${updatedSitesResults.length > 1 ? 'i' : 'e'} aggiornat${updatedSitesResults.length > 1 ? 'i' : 'o'} con successo.`);
+
+        } catch (error) {
+            console.error("Failed to import services", error);
+            alert("Importazione fallita. Controlla la console per i dettagli.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-                <h2 className="text-2xl font-bold text-gray-800">Pianificazione Servizi</h2>
-                <div className="flex items-center gap-4">
-                     <input 
-                        type="text"
-                        placeholder="Cerca cantiere..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="p-2 border border-gray-300 rounded-lg w-64"
-                    />
-                    <div className="flex items-center border rounded-lg">
-                        <button onClick={() => changeWeek(-1)} className="px-3 py-2 rounded-l-lg hover:bg-gray-100"><i className="fa-solid fa-chevron-left"></i></button>
-                        <span className="px-4 py-1.5 text-lg font-semibold text-gray-700 border-x">{dateFormatter.format(weekDates[0])} - {dateFormatter.format(weekDates[6])}</span>
-                        <button onClick={() => changeWeek(1)} className="px-3 py-2 rounded-r-lg hover:bg-gray-100"><i className="fa-solid fa-chevron-right"></i></button>
+        <>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                    <h2 className="text-2xl font-bold text-gray-800">Pianificazione Servizi</h2>
+                    <div className="flex items-center gap-4">
+                        <input 
+                            type="text"
+                            placeholder="Cerca cantiere..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="p-2 border border-gray-300 rounded-lg w-64"
+                        />
+                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+                            <i className="fa-solid fa-file-import"></i>Importa
+                        </button>
+                        <div className="flex items-center border rounded-lg">
+                            <button onClick={() => changeWeek(-1)} className="px-3 py-2 rounded-l-lg hover:bg-gray-100"><i className="fa-solid fa-chevron-left"></i></button>
+                            <span className="px-4 py-1.5 text-lg font-semibold text-gray-700 border-x">{dateFormatter.format(weekDates[0])} - {dateFormatter.format(weekDates[6])}</span>
+                            <button onClick={() => changeWeek(1)} className="px-3 py-2 rounded-r-lg hover:bg-gray-100"><i className="fa-solid fa-chevron-right"></i></button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full border-collapse min-w-[1200px]">
-                    <thead>
-                        <tr className="bg-gray-50">
-                            <th className="p-2 border text-left text-sm font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 w-64">Cantiere</th>
-                            {weekDates.map(date => (
-                                <th key={date.toISOString()} className="p-2 border text-sm font-semibold capitalize w-48 text-gray-600">
-                                    {dayFormatter.format(date)}
-                                    <span className="block text-xs font-normal">{dateFormatter.format(date)}</span>
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredSites.map(site => (
-                            <tr key={site.id} className="border-b hover:bg-gray-50">
-                                <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 w-64 align-top">
-                                    <p className="font-bold">{site.name}</p>
-                                    <p className="text-xs text-gray-500">{site.client}</p>
-                                </td>
-                                {weekDates.map(date => {
-                                    const dayOfWeek = capitalize(weekDayLongFormatter.format(date));
-                                    const assignmentsForDay = site.assignments.filter(a => a.workingDays.includes(dayOfWeek));
-                                    
-                                    return (
-                                        <td key={date.toISOString()} className="p-1 border align-top h-20">
-                                            {assignmentsForDay.length > 0 ? (
-                                                <div className="space-y-1.5">
-                                                    {assignmentsForDay.map(ass => (
-                                                        <div key={ass.employeeId} className="p-1.5 bg-blue-50 rounded text-xs">
-                                                            <p className="font-semibold text-blue-800">{employeeMap.get(ass.employeeId) || 'Sconosciuto'}</p>
-                                                            <p className="text-blue-700">{ass.workingHours}</p>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </td>
-                                    );
-                                })}
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse min-w-[1200px]">
+                        <thead>
+                            <tr className="bg-gray-50">
+                                <th className="p-2 border text-left text-sm font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 w-64">Cantiere</th>
+                                {weekDates.map(date => (
+                                    <th key={date.toISOString()} className="p-2 border text-sm font-semibold capitalize w-48 text-gray-600">
+                                        {dayFormatter.format(date)}
+                                        <span className="block text-xs font-normal">{dateFormatter.format(date)}</span>
+                                    </th>
+                                ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-                 {filteredSites.length === 0 && (
-                    <div className="text-center p-8 text-gray-500">
-                        Nessun cantiere trovato per i criteri di ricerca.
-                    </div>
-                )}
+                        </thead>
+                        <tbody>
+                            {filteredSites.map(site => (
+                                <tr key={site.id} className="border-b hover:bg-gray-50">
+                                    <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 w-64 align-top">
+                                        <p className="font-bold">{site.name}</p>
+                                        <p className="text-xs text-gray-500">{site.client}</p>
+                                    </td>
+                                    {weekDates.map(date => {
+                                        const dayOfWeek = capitalize(weekDayLongFormatter.format(date));
+                                        const assignmentsForDay = site.assignments.filter(a => a.workingDays.includes(dayOfWeek));
+                                        
+                                        return (
+                                            <td key={date.toISOString()} className="p-1 border align-top h-20">
+                                                {assignmentsForDay.length > 0 ? (
+                                                    <div className="space-y-1.5">
+                                                        {assignmentsForDay.map(ass => (
+                                                            <div key={ass.employeeId} className="p-1.5 bg-blue-50 rounded text-xs">
+                                                                <p className="font-semibold text-blue-800">{employeeMap.get(ass.employeeId) || 'Sconosciuto'}</p>
+                                                                <p className="text-blue-700">{ass.workingHours}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {filteredSites.length === 0 && (
+                        <div className="text-center p-8 text-gray-500">
+                            Nessun cantiere trovato per i criteri di ricerca.
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+            {isImportModalOpen && (
+                <ServiceImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onImport={handleImportServices}
+                    isImporting={isSaving}
+                    sites={sites}
+                    employees={employees}
+                />
+            )}
+        </>
     );
 };
 
