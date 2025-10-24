@@ -1,31 +1,20 @@
-
-
-import React, { useState, useMemo } from 'react';
-import { Employee, WorkSite, ApiKey } from '../types';
-import { GoogleGenAI } from '@google/genai';
+import React, { useState } from 'react';
+import { Employee, WorkSite } from '../types';
 
 interface FindOperatorsProps {
     employees: Employee[];
     sites: WorkSite[];
-    apiKeys: ApiKey[];
 }
 
-interface SearchResult {
-    employeeId: string;
-    distance: string;
-}
-
-const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys }) => {
+const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites }) => {
     const [address, setAddress] = useState('');
     const [workingHours, setWorkingHours] = useState('08:00 - 12:00');
     const [workingDays, setWorkingDays] = useState<string[]>([]);
     
-    const [results, setResults] = useState<(Employee & { distance: string })[]>([]);
+    const [results, setResults] = useState<Employee[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchPerformed, setSearchPerformed] = useState(false);
-
-    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
 
     const handleDayToggle = (day: string) => {
         setWorkingDays(prev => 
@@ -33,95 +22,58 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
         );
     };
 
-    const handleSearch = async () => {
+    const handleSearch = () => {
         setIsLoading(true);
         setError(null);
         setResults([]);
         setSearchPerformed(true);
 
-        if (!geminiApiKey) {
-            setError("Chiave API Gemini non configurata. Vai su Impostazioni API per aggiungerla.");
-            setIsLoading(false);
-            return;
-        }
-        if (!address.trim()) {
-            setError("L'indirizzo del cantiere è obbligatorio per calcolare la distanza.");
-            setIsLoading(false);
-            return;
-        }
-
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const allAssignments = sites.flatMap(site => site.assignments);
-        const employeeData = employees.map(emp => ({
-            id: emp.id,
-            name: `${emp.firstName} ${emp.lastName}`,
-            address: emp.address,
-            assignments: allAssignments
-                .filter(a => a.employeeId === emp.id)
-                .map(a => ({ workingHours: a.workingHours, workingDays: a.workingDays }))
-        }));
-
-        const prompt = `
-            TASK: Identify available cleaning operators and calculate their distance to a new worksite.
-
-            RULES:
-            1. An operator is UNAVAILABLE if they have an existing assignment that overlaps with the requested work schedule (days and time).
-            2. For each AVAILABLE operator, calculate the driving distance in kilometers from their home address to the new worksite address.
-            3. The final output must be a JSON array of objects, sorted by distance (closest first).
-            4. Each object must contain 'employeeId' and 'distance' (as a string, e.g., "15.3 km").
-            5. If no operators are available, return an empty array [].
-            6. The entire response must be ONLY the JSON array. Do not include any explanatory text or markdown formatting.
-
-            INPUT DATA:
-            - New Worksite Address: "${address}"
-            - Requested Schedule:
-              - Days: ${JSON.stringify(workingDays)}
-              - Hours: "${workingHours}"
-            - Operator Data: ${JSON.stringify(employeeData)}
-
-            OUTPUT FORMAT (JSON ARRAY ONLY):
-            [
-              { "employeeId": "emp-1", "distance": "5.2 km" },
-              { "employeeId": "emp-4", "distance": "12.8 km" }
-            ]
-        `;
-
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: prompt,
-                config: {
-                    tools: [{ googleMaps: {} }],
-                },
+            // Helper to parse HH:MM into minutes from midnight for easy comparison
+            const parseTime = (timeStr: string): number => {
+                if (!timeStr || !timeStr.includes(':')) return NaN;
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            };
+
+            const [reqStart, reqEnd] = workingHours.split(' - ').map(parseTime);
+
+            if (isNaN(reqStart) || isNaN(reqEnd)) {
+                throw new Error("Formato orario non valido. Usare HH:MM - HH:MM.");
+            }
+
+            const allAssignments = sites.flatMap(site => 
+                site.assignments.map(a => ({...a, siteName: site.name}))
+            );
+
+            const availableEmployees = employees.filter(employee => {
+                const employeeAssignments = allAssignments.filter(a => a.employeeId === employee.id);
+
+                // Check for any overlap
+                const hasOverlap = employeeAssignments.some(assignment => {
+                    // 1. Check if there's a day conflict
+                    const dayConflict = assignment.workingDays.some(day => workingDays.includes(day));
+                    if (!dayConflict) {
+                        return false; // No overlap on this assignment, check next
+                    }
+
+                    // 2. If day conflict, check for time conflict
+                    const [assStart, assEnd] = assignment.workingHours.split(' - ').map(parseTime);
+                    if (isNaN(assStart) || isNaN(assEnd)) {
+                        return false; // Skip malformed assignment time
+                    }
+
+                    // Overlap condition: (StartA < EndB) and (EndA > StartB)
+                    return reqStart < assEnd && reqEnd > assStart;
+                });
+                
+                return !hasOverlap; // Employee is available if they have NO overlaps
             });
             
-            const text = response.text;
-            if (!text) {
-                throw new Error("La risposta del modello è vuota o non valida.");
-            }
+            setResults(availableEmployees);
 
-            const jsonMatch = text.match(/\[.*\]/s);
-            if (!jsonMatch) {
-                console.error("Invalid JSON response:", text);
-                throw new Error("La risposta del modello non è un JSON valido.");
-            }
-            const parsedResults: SearchResult[] = JSON.parse(jsonMatch[0]);
-
-            const employeeMap = new Map(employees.map(e => [e.id, e]));
-            const finalResults = parsedResults.map(res => {
-                const employee = employeeMap.get(res.employeeId);
-                if (employee) {
-                    // FIX: Replaced object spread with Object.assign to fix "Spread types may only be created from object types" error.
-                    return Object.assign({}, employee, { distance: res.distance });
-                }
-                return null;
-            }).filter((res): res is Employee & { distance: string } => res !== null);
-            
-            setResults(finalResults);
-
-        } catch (e: any) {
-            console.error("Error calling Gemini API:", e);
-            setError(`Errore durante la ricerca con AI: ${e.message || 'Dettagli non disponibili.'}`);
+        } catch(e: any) {
+            setError(e.message || "Si è verificato un errore durante la ricerca.");
         } finally {
             setIsLoading(false);
         }
@@ -131,14 +83,14 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
     
     return (
         <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Cerca Operatori Vicini</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Cerca Operatori Disponibili</h2>
             <p className="text-gray-600 mb-6">
-                Inserisci i dettagli del nuovo cantiere per trovare gli operatori disponibili più vicini.
+                Inserisci i dettagli del nuovo cantiere per trovare gli operatori liberi da impegni.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 border rounded-lg bg-gray-50">
                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo del nuovo cantiere</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo del nuovo cantiere (opzionale)</label>
                     <input
                         type="text"
                         value={address}
@@ -146,7 +98,6 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
                         placeholder="Es. Via Roma 1, Milano"
                         className="w-full p-2 border border-gray-300 rounded-lg"
                         disabled={isLoading}
-                        required
                     />
                 </div>
                 <div>
@@ -183,10 +134,10 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
              <div className="text-right">
                 <button
                     onClick={handleSearch}
-                    disabled={isLoading || workingDays.length === 0 || !address.trim()}
+                    disabled={isLoading || workingDays.length === 0}
                     className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-w-[150px]"
                 >
-                    {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-map-location-dot mr-2"></i>Cerca</>}
+                    {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-search mr-2"></i>Cerca Disponibilità</>}
                 </button>
             </div>
             
@@ -195,13 +146,13 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
             {isLoading && (
                 <div className="mt-8 text-center p-6">
                     <i className="fa-solid fa-spinner fa-spin text-3xl text-blue-600"></i>
-                    <p className="mt-2 text-gray-600">Analisi disponibilità e calcolo distanze in corso...</p>
+                    <p className="mt-2 text-gray-600">Analisi disponibilità in corso...</p>
                 </div>
             )}
 
             {!isLoading && searchPerformed && results.length > 0 && (
                  <div className="mt-8">
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">Risultati: Operatori Disponibili Ordinati per Vicinanza</h3>
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Risultati: Operatori Disponibili</h3>
                     <div className="space-y-4">
                         {results.map((result) => (
                              <div key={result.id} className="p-4 border rounded-lg bg-gray-50 flex items-center gap-4">
@@ -213,8 +164,7 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
                                     <p className="text-sm text-gray-600">{result.address}</p>
                                </div>
                                <div className="ml-auto text-right flex-shrink-0">
-                                   <p className="font-bold text-xl text-blue-600">{result.distance}</p>
-                                   <p className="text-xs text-gray-500">Distanza</p>
+                                   <p className="font-semibold text-green-600">Disponibile</p>
                                </div>
                             </div>
                         ))}
