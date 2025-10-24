@@ -1,3 +1,4 @@
+<script src="https://cdn.tailwindcss.com"></script>
 import React, { useState } from 'react';
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
@@ -144,7 +145,7 @@ const MainApp = () => {
                         {renderRoute("/", <Dashboard employees={employees} sites={sites} />, ['Amministratore', 'Responsabile', 'Lavoratore'])}
                         {renderRoute("/employees", <EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/sites", <SiteList sites={sites} setSites={setSites} employees={employees} />, ['Amministratore', 'Responsabile'])}
-                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} />, ['Amministratore', 'Responsabile'])}
+                        {renderRoute("/find-operators", <FindOperators employees={employees} sites={sites} apiKeys={apiKeys} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/users", <UserList users={users} setUsers={setUsers} employees={employees} />, ['Amministratore'])}
                         {renderRoute("/absences/requests", <LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />, ['Amministratore', 'Responsabile'])}
                         {renderRoute("/absences/sickness", <Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />, ['Amministratore', 'Responsabile'])}
