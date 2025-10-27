@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -7,6 +8,7 @@ import { useAppData } from './hooks/useMockData';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import EmployeeList from './components/EmployeeList';
+// FIX: Correctly importing SiteList which will be created.
 import SiteList from './components/SiteList';
 import Services from './components/Services';
 import LeaveRequests from './components/absences/LeaveRequests';

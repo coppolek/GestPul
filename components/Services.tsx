@@ -133,8 +133,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 };
                 sitesToUpdatePayload.push(updatedSite);
             }
-
-            const updatePromises = sitesToUpdatePayload.map(site => api.updateData('sites', site.id, site));
+            // FIX: Explicitly providing the generic type to `api.updateData` to help TypeScript infer the correct return type for Promise.all.
+            const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
             // FIX: Explicitly type the result of Promise.all to prevent type inference issues where the result could be treated as `unknown[]`.
             const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
             
