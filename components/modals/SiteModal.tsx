@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { WorkSite, SiteAssignment, Employee } from '../../types';
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { WorkSite, Employee, SiteAssignment } from '../../types';
 
 interface SiteModalProps {
   isOpen: boolean;
@@ -13,85 +14,128 @@ interface SiteModalProps {
 const ALL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 
 const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, employees, isSaving }) => {
-  const [formData, setFormData] = useState<Omit<WorkSite, 'id' | 'assignments'>>({
+  const [formData, setFormData] = useState({
     name: '',
     client: '',
     address: '',
-    startDate: '',
-    endDate: '',
-    status: 'In Corso',
+    startDate: new Date().toISOString().split('T')[0],
+    status: 'In Corso' as const,
   });
   const [assignments, setAssignments] = useState<SiteAssignment[]>([]);
-  const [newAssignmentEmployeeId, setNewAssignmentEmployeeId] = useState<string>('');
   
-  const employeeMap = new Map(employees.map(e => [e.id, `${e.firstName} ${e.lastName}`]));
+  // State for employee selection dropdown
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [newAssignmentEmployeeId, setNewAssignmentEmployeeId] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const employeeIdMap = useMemo(() => new Map(employees.map(emp => [emp.id, `${emp.firstName} ${emp.lastName}`])), [employees]);
 
   useEffect(() => {
     if (site) {
-      const { id, assignments, ...rest } = site;
-      setFormData(rest);
-      setAssignments(assignments);
+      setFormData({
+        name: site.name,
+        client: site.client,
+        address: site.address,
+        startDate: site.startDate,
+        status: site.status,
+      });
+      setAssignments(site.assignments);
     } else {
+      // Reset form for new site
       setFormData({
         name: '',
         client: '',
         address: '',
         startDate: new Date().toISOString().split('T')[0],
-        endDate: '',
-        status: 'In Corso',
+        status: 'In Corso' as const,
       });
       setAssignments([]);
     }
-    setNewAssignmentEmployeeId('');
   }, [site]);
 
-  const handleBaseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  // Click outside handler for dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleBaseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleAssignmentChange = (index: number, field: keyof SiteAssignment, value: any) => {
-    setAssignments(prev => {
-        const newAssignments = [...prev];
-        (newAssignments[index] as any)[field] = value;
-        return newAssignments;
-    });
-  };
-  
-  const handleDayChange = (index: number, day: string) => {
-    setAssignments(prev => {
-        const newAssignments = [...prev];
-        const currentDays = newAssignments[index].workingDays;
-        if(currentDays.includes(day)) {
-            newAssignments[index].workingDays = currentDays.filter(d => d !== day);
-        } else {
-            newAssignments[index].workingDays = [...currentDays, day];
-        }
-        return newAssignments;
-    })
+    const newAssignments = [...assignments];
+    (newAssignments[index] as any)[field] = value;
+    setAssignments(newAssignments);
   };
 
-  const handleAddAssignment = () => {
-    if (newAssignmentEmployeeId && !assignments.some(a => a.employeeId === newAssignmentEmployeeId)) {
-        setAssignments(prev => [...prev, {
-            employeeId: newAssignmentEmployeeId,
-            workingHours: '08:00 - 17:00',
-            workingDays: []
-        }]);
-        setNewAssignmentEmployeeId('');
+  const handleDayChange = (index: number, day: string) => {
+    const newAssignments = [...assignments];
+    const currentDays = newAssignments[index].workingDays;
+    if (currentDays.includes(day)) {
+      newAssignments[index].workingDays = currentDays.filter(d => d !== day);
+    } else {
+      newAssignments[index].workingDays = [...currentDays, day];
     }
+    setAssignments(newAssignments);
   };
 
   const handleRemoveAssignment = (index: number) => {
     setAssignments(prev => prev.filter((_, i) => i !== index));
   };
+  
+  const handleEmployeeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEmployeeSearch(e.target.value);
+      setNewAssignmentEmployeeId(null);
+      if (!isDropdownOpen) {
+          setIsDropdownOpen(true);
+      }
+  };
+
+  const handleEmployeeSelect = (employee: Employee) => {
+      setEmployeeSearch(`${employee.firstName} ${employee.lastName}`);
+      setNewAssignmentEmployeeId(employee.id);
+      setIsDropdownOpen(false);
+  };
+  
+  const handleAddAssignment = () => {
+      if (newAssignmentEmployeeId) {
+          setAssignments(prev => [...prev, {
+              employeeId: newAssignmentEmployeeId,
+              workingHours: '08:00-17:00',
+              workingDays: [],
+          }]);
+          setEmployeeSearch('');
+          setNewAssignmentEmployeeId(null);
+      }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...formData, id: site?.id, assignments });
+    onSave({ ...formData, assignments, id: site?.id });
   };
-  
-  const availableEmployees = employees.filter(e => !assignments.some(a => a.employeeId === e.id));
+
+  const availableEmployees = useMemo(() => {
+    const assignedIds = new Set(assignments.map(a => a.employeeId));
+    return employees.filter(emp => !assignedIds.has(emp.id));
+  }, [employees, assignments]);
+
+  const filteredAvailableEmployees = useMemo(() => {
+      if (!employeeSearch) return availableEmployees;
+      return availableEmployees.filter(emp =>
+          `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(employeeSearch.toLowerCase())
+      );
+  }, [availableEmployees, employeeSearch]);
+
 
   if (!isOpen) return null;
 
@@ -128,7 +172,7 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
                     {assignments.map((ass, index) => (
                         <div key={index} className="p-4 bg-gray-50 rounded-lg border">
                             <div className="flex justify-between items-center mb-4">
-                                <p className="font-bold text-lg text-gray-800">{employeeMap.get(ass.employeeId)}</p>
+                                <p className="font-bold text-lg text-gray-800">{employeeIdMap.get(ass.employeeId)}</p>
                                 <button type="button" onClick={() => handleRemoveAssignment(index)} className="text-red-500 hover:text-red-700">
                                     <i className="fa-solid fa-trash mr-1"></i> Rimuovi
                                 </button>
@@ -166,16 +210,34 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
                 </div>
                 
                 <div className="mt-6 flex items-center gap-4 p-4 border-t">
-                    <select
-                        value={newAssignmentEmployeeId}
-                        onChange={(e) => setNewAssignmentEmployeeId(e.target.value)}
-                        className="flex-grow p-2 border border-gray-300 rounded-lg"
-                    >
-                        <option value="">Seleziona un operatore da aggiungere...</option>
-                        {availableEmployees.map(emp => (
-                            <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
-                        ))}
-                    </select>
+                    <div className="relative flex-grow" ref={dropdownRef}>
+                        <input
+                            type="text"
+                            value={employeeSearch}
+                            onChange={handleEmployeeSearchChange}
+                            onFocus={() => setIsDropdownOpen(true)}
+                            placeholder="Cerca operatore da aggiungere..."
+                            className="w-full p-2 border border-gray-300 rounded-lg"
+                            autoComplete="off"
+                        />
+                        {isDropdownOpen && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {filteredAvailableEmployees.length > 0 ? (
+                                    filteredAvailableEmployees.map(emp => (
+                                        <div 
+                                            key={emp.id}
+                                            onClick={() => handleEmployeeSelect(emp)}
+                                            className="p-2 hover:bg-blue-100 cursor-pointer"
+                                        >
+                                            {emp.firstName} {emp.lastName}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="p-2 text-gray-500">Nessun operatore disponibile trovato.</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <button type="button" onClick={handleAddAssignment} disabled={!newAssignmentEmployeeId} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400">
                         <i className="fa-solid fa-plus mr-2"></i>Aggiungi
                     </button>
