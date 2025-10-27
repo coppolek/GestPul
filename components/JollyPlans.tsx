@@ -548,13 +548,20 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             <td className="p-2 border font-bold text-yellow-800 sticky left-0 bg-yellow-50 z-10 w-48 align-top"><i className="fa-solid fa-person-walking-arrow-right mr-2"></i>Turni Scoperti</td>
                             {weekDates.map(date => (
                                 <td key={date.toISOString()} className="p-2 border align-top">
-                                    {uncoveredShifts.filter(s => s.date === date.toISOString().split('T')[0]).map((shift, i) => (
-                                        <div key={i} draggable onDragStart={() => handleDragStart('absence', shift, null)} className="p-1.5 bg-yellow-100 rounded text-xs cursor-grab mb-1">
-                                            <p className="font-semibold text-yellow-900">{shift.siteName}</p>
-                                            <p className="text-yellow-700 italic">Assente: {shift.employeeName}</p>
-                                            <p className="text-yellow-800">{shift.workingHours}</p>
-                                        </div>
-                                    ))}
+                                    {uncoveredShifts.filter(s => s.date === date.toISOString().split('T')[0]).map((shift, i) => {
+                                        const [start, end] = shift.workingHours.split(' - ');
+                                        const duration = calculateHours(start, end);
+                                        return (
+                                            <div key={i} draggable onDragStart={() => handleDragStart('absence', shift, null)} className="p-1.5 bg-yellow-100 rounded text-xs cursor-grab mb-1">
+                                                <p className="font-semibold text-yellow-900">{shift.siteName}</p>
+                                                <p className="text-yellow-700 italic">Assente: {shift.employeeName}</p>
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-yellow-800">{shift.workingHours}</p>
+                                                    {duration > 0 && <p className="font-bold text-yellow-900">{duration.toFixed(2)}h</p>}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
                                 </td>
                             ))}
                             <td className="p-2 border bg-gray-50"></td>
@@ -583,6 +590,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                 <div className="space-y-1.5 h-full">
                                                     {Array.isArray(dayAssignments) && dayAssignments.map(ass => {
                                                         const isConflict = conflicts.has(ass.id);
+                                                        const duration = calculateHours(ass.startTime, ass.endTime);
                                                         return(
                                                         <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200 text-red-900' : 'bg-blue-100 text-blue-900'}`}>
                                                             {isConflict && <i className="fa-solid fa-triangle-exclamation text-red-600 absolute -top-1 -left-1"></i>}
@@ -592,7 +600,10 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                                     Assente: {ass.originalEmployeeName}
                                                                 </p>
                                                             )}
-                                                            <p>{ass.startTime} - {ass.endTime}</p>
+                                                            <div className="flex justify-between items-center">
+                                                                <p>{ass.startTime} - {ass.endTime}</p>
+                                                                {duration > 0 && <p className="font-bold">{duration.toFixed(2)}h</p>}
+                                                            </div>
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                                 <button onClick={(e) => { e.stopPropagation(); handleOpenModal(planner.id, dateStr, ass); }} className="text-yellow-600 px-1"><i className="fa fa-pencil"></i></button>
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteAssignment(planner.id, dateStr, ass.id); }} className="text-red-500 px-1"><i className="fa fa-trash"></i></button>
