@@ -48,7 +48,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 updatedAssignments = [...selectedSite.assignments, data];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            await api.updateData('sites', selectedSite.id, updatedSite);
+            // FIX: Add generic type for consistency and better type inference.
+            await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
             setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
             handleCloseModals();
         } catch (error) {
@@ -66,7 +67,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             try {
                 const updatedAssignments = site.assignments.filter(a => a.employeeId !== employeeId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                await api.updateData('sites', site.id, updatedSite);
+                // FIX: Add generic type for consistency and better type inference.
+                await api.updateData<WorkSite>('sites', site.id, updatedSite);
                 setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
             } catch (error) {
                 console.error("Failed to delete assignment", error);
