@@ -68,6 +68,7 @@ export interface Assignment {
     siteId: string;
     startTime: string;
     endTime: string;
+    originalEmployeeName?: string;
 }
   
 export interface Schedule {

@@ -243,6 +243,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             siteId: data.siteId,
             startTime: type === 'absence' ? data.workingHours.split(' - ')[0].trim() : data.startTime,
             endTime: type === 'absence' ? data.workingHours.split(' - ')[1].trim() : data.endTime,
+            originalEmployeeName: type === 'absence' ? data.employeeName : data.originalEmployeeName,
         };
     
         // --- Create the next state optimistically ---
@@ -392,9 +393,23 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             }
 
             for (const [date, newAssignments] of Object.entries(dailyAssignments as Record<string, any[]>)) {
-                 schedule.assignments[date] = [
+                 const assignmentsWithOriginalEmployee = newAssignments.map(a => {
+                    const workingHours = `${a.startTime} - ${a.endTime}`;
+                    const originalShift = uncoveredShifts.find(s => 
+                        s.date === date && 
+                        s.siteId === a.siteId && 
+                        s.workingHours.replace(/\s/g, '') === workingHours.replace(/\s/g, '')
+                    );
+                    return {
+                        ...a, 
+                        id: `asg-${Date.now()}-${Math.random()}`,
+                        originalEmployeeName: originalShift ? originalShift.employeeName : undefined
+                    };
+                });
+
+                schedule.assignments[date] = [
                     ...(schedule.assignments[date] || []), 
-                    ...newAssignments.map(a => ({...a, id: `asg-${Date.now()}-${Math.random()}`}))
+                    ...assignmentsWithOriginalEmployee
                 ];
             }
 
@@ -438,7 +453,12 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     
             if (bestJollyId) {
                 const [startTime, endTime] = shift.workingHours.split(' - ');
-                const newAssignment = { siteId: shift.siteId, startTime, endTime };
+                const newAssignment = { 
+                    siteId: shift.siteId, 
+                    startTime, 
+                    endTime,
+                    originalEmployeeName: shift.employeeName,
+                };
                 
                 if (!newAssignmentsByEmployee[bestJollyId]) newAssignmentsByEmployee[bestJollyId] = [];
                 newAssignmentsByEmployee[bestJollyId].push({ date: shift.date, assignment: newAssignment });
@@ -564,10 +584,15 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                     {Array.isArray(dayAssignments) && dayAssignments.map(ass => {
                                                         const isConflict = conflicts.has(ass.id);
                                                         return(
-                                                        <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200' : 'bg-blue-100'}`}>
+                                                        <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200 text-red-900' : 'bg-blue-100 text-blue-900'}`}>
                                                             {isConflict && <i className="fa-solid fa-triangle-exclamation text-red-600 absolute -top-1 -left-1"></i>}
-                                                            <p className={`font-bold ${isConflict ? 'text-red-800' : 'text-blue-800'}`}>{siteMap.get(ass.siteId)}</p>
-                                                            <p className={`${isConflict ? 'text-red-700' : 'text-blue-700'}`}>{ass.startTime} - {ass.endTime} ({calculateHours(ass.startTime, ass.endTime).toFixed(2)}h)</p>
+                                                            <p className="font-semibold">{siteMap.get(ass.siteId)}</p>
+                                                            {ass.originalEmployeeName && (
+                                                                <p className={`italic ${isConflict ? 'text-red-800' : 'text-blue-800'}`}>
+                                                                    Assente: {ass.originalEmployeeName}
+                                                                </p>
+                                                            )}
+                                                            <p>{ass.startTime} - {ass.endTime}</p>
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                                 <button onClick={(e) => { e.stopPropagation(); handleOpenModal(planner.id, dateStr, ass); }} className="text-yellow-600 px-1"><i className="fa fa-pencil"></i></button>
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteAssignment(planner.id, dateStr, ass.id); }} className="text-red-500 px-1"><i className="fa fa-trash"></i></button>
