@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import ServiceAssignmentModal from './modals/ServiceAssignmentModal';
@@ -134,7 +135,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             }
 
             const updatePromises = sitesToUpdatePayload.map(site => api.updateData('sites', site.id, site));
-            const updatedSitesFromApi = await Promise.all(updatePromises);
+            // FIX: Explicitly type the result of Promise.all to prevent type inference issues where the result could be treated as `unknown[]`.
+            const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
             
             setSites(prev => {
                 const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
