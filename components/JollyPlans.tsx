@@ -531,8 +531,8 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                     {uncoveredShifts.filter(s => s.date === date.toISOString().split('T')[0]).map((shift, i) => (
                                         <div key={i} draggable onDragStart={() => handleDragStart('absence', shift, null)} className="p-1.5 bg-yellow-100 rounded text-xs cursor-grab mb-1">
                                             <p className="font-semibold text-yellow-900">{shift.siteName}</p>
+                                            <p className="text-yellow-700 italic">Assente: {shift.employeeName}</p>
                                             <p className="text-yellow-800">{shift.workingHours}</p>
-                                            <p className="text-yellow-700">Assente: {shift.employeeName}</p>
                                         </div>
                                     ))}
                                 </td>
