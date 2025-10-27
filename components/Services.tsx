@@ -159,14 +159,12 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Add explicit type to `updatedSitesFromApi` to prevent 'unknown' type on its elements.
                 const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
                     return prev.map(s => updatedSiteMap.get(s.id) || s);
                 });
-                // FIX: Correctly calculate the total number of successful assignments, as 'newAssignments' is out of scope.
                 successCount = Array.from(assignmentsBySite.values()).reduce((total, assignments) => total + assignments.length, 0);
             }
             setImportResult({ success: successCount, skipped: [...new Set(skipped)] }); // Remove duplicates
