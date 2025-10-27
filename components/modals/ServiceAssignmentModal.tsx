@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../../types';
 
@@ -62,12 +61,9 @@ const ServiceAssignmentModal: React.FC<ServiceAssignmentModalProps> = ({
   };
 
   const availableEmployees = useMemo(() => {
-      // In edit mode, the current employee should be in the list
-      if (isEditing) return employees;
-      // In add mode, show only unassigned employees
-      const assignedIds = new Set(site.assignments.map(a => a.employeeId));
-      return employees.filter(e => !assignedIds.has(e.id));
-  }, [employees, site, isEditing]);
+      // Always show all employees to allow multiple assignments for the same person
+      return employees;
+  }, [employees]);
 
   if (!isOpen) return null;
 

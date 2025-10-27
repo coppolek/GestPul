@@ -1,7 +1,7 @@
 // A simple in-memory database that simulates a backend API.
 // It uses localStorage for persistence.
 
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment } from '../types';
 
 type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys';
 
@@ -28,12 +28,12 @@ const initialData: DataShape = {
   ],
   sites: [
     { id: 'site-1', name: 'Condominio Sole', client: 'Amministrazioni srl', address: 'Via Dante 15, 20121 Milano', startDate: '2023-01-01', status: 'In Corso', assignments: [
-        { employeeId: 'emp-1', workingHours: '08:00 - 12:00', workingDays: ['Lunedì', 'Mercoledì', 'Venerdì'] },
-        { employeeId: 'emp-2', workingHours: '14:00 - 18:00', workingDays: ['Martedì', 'Giovedì'] },
-        { employeeId: 'emp-4', workingHours: '09:00 - 13:00', workingDays: ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì'] },
+        { id: 'asg-1', employeeId: 'emp-1', workingHours: '08:00 - 12:00', workingDays: ['Lunedì', 'Mercoledì', 'Venerdì'] },
+        { id: 'asg-2', employeeId: 'emp-2', workingHours: '14:00 - 18:00', workingDays: ['Martedì', 'Giovedì'] },
+        { id: 'asg-3', employeeId: 'emp-4', workingHours: '09:00 - 13:00', workingDays: ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì'] },
     ]},
     { id: 'site-2', name: 'Uffici Futura', client: 'Futura SpA', address: 'Piazza Duomo 1, 20122 Milano', startDate: '2023-05-01', status: 'In Corso', assignments: [
-        { employeeId: 'emp-5', workingHours: '07:00 - 11:00', workingDays: ['Lunedì', 'Mercoledì', 'Venerdì'] },
+        { id: 'asg-4', employeeId: 'emp-5', workingHours: '07:00 - 11:00', workingDays: ['Lunedì', 'Mercoledì', 'Venerdì'] },
     ]}
   ],
   leaveRequests: [

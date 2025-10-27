@@ -1,9 +1,8 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import ServiceAssignmentModal from './modals/ServiceAssignmentModal';
 import ServiceImportModal from './modals/ServiceImportModal';
+import SiteModal from './modals/SiteModal'; // For adding a new site
 import * as api from '../services/api';
 
 interface ServicesProps {
@@ -14,11 +13,13 @@ interface ServicesProps {
 
 const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+    const [isSiteModalOpen, setIsSiteModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedSite, setSelectedSite] = useState<WorkSite | null>(null);
     const [selectedAssignment, setSelectedAssignment] = useState<SiteAssignment | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [importResult, setImportResult] = useState<{ success: number, skipped: string[] } | null>(null);
 
     const employeeMap = useMemo(() => new Map(employees.map(emp => [emp.id, `${emp.firstName} ${emp.lastName}`])), [employees]);
 
@@ -31,10 +32,33 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
     const handleCloseModals = () => {
         setIsAssignmentModalOpen(false);
         setIsImportModalOpen(false);
+        setIsSiteModalOpen(false);
         setSelectedSite(null);
         setSelectedAssignment(null);
+        setImportResult(null);
     };
 
+    const handleSaveSite = async (siteData: Omit<WorkSite, 'id'> & { id?: string }) => {
+      setIsSaving(true);
+      try {
+        if (siteData.id) {
+          // This should not happen from here, but as a safeguard
+          const updatedSite = await api.updateData<WorkSite>('sites', siteData.id, siteData as WorkSite);
+          setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
+        } else {
+          // Add
+          const newSite = await api.addData<Omit<WorkSite, 'id'>, WorkSite>('sites', siteData);
+          setSites(prev => [...prev, newSite]);
+        }
+        handleCloseModals();
+      } catch (error) {
+        console.error("Failed to save site", error);
+        alert("Salvataggio fallito.");
+      } finally {
+        setIsSaving(false);
+      }
+    };
+    
     const handleSaveAssignment = async (data: { employeeId: string; workingHours: string; workingDays:string[] }) => {
         if (!selectedSite) return;
         setIsSaving(true);
@@ -42,15 +66,18 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             let updatedAssignments: SiteAssignment[];
             if (selectedAssignment) { // Editing
                 updatedAssignments = selectedSite.assignments.map(a =>
-                    a.employeeId === selectedAssignment.employeeId ? { ...a, ...data } : a
+                    a.id === selectedAssignment.id ? { ...selectedAssignment, ...data } : a
                 );
             } else { // Adding
-                updatedAssignments = [...selectedSite.assignments, data];
+                const newAssignment: SiteAssignment = {
+                    id: `asg-${Date.now()}`,
+                    ...data
+                };
+                updatedAssignments = [...selectedSite.assignments, newAssignment];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            // FIX: Add generic type for consistency and better type inference.
-            await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
-            setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
+            const savedSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
+            setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             handleCloseModals();
         } catch (error) {
             console.error("Failed to save assignment", error);
@@ -60,16 +87,15 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
         }
     };
 
-    const handleDeleteAssignment = async (siteId: string, employeeId: string) => {
+    const handleDeleteAssignment = async (siteId: string, assignmentId: string) => {
         if (window.confirm('Sei sicuro di voler rimuovere questo servizio?')) {
             const site = sites.find(s => s.id === siteId);
             if (!site) return;
             try {
-                const updatedAssignments = site.assignments.filter(a => a.employeeId !== employeeId);
+                const updatedAssignments = site.assignments.filter(a => a.id !== assignmentId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                // FIX: Add generic type for consistency and better type inference.
-                await api.updateData<WorkSite>('sites', site.id, updatedSite);
-                setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
+                const savedSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
+                setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             } catch (error) {
                 console.error("Failed to delete assignment", error);
                 alert("Eliminazione fallita.");
@@ -79,24 +105,26 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
 
     const handleImportServices = async (services: { siteName: string; employeeName: string; workingHours: string; workingDays: string[] }[]) => {
         setIsSaving(true);
+        setImportResult(null);
+
+        const normalize = (str: string) => str.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").replace(/\s+/g, ' ');
+
         try {
-            const siteNameMap = new Map(sites.map(s => [s.name.trim().toLowerCase(), s]));
+            const siteNameMap = new Map(sites.map(s => [normalize(s.name), s]));
+            
             const employeeNameMap = new Map<string, Employee>();
             employees.forEach(e => {
-                const fullName = `${e.firstName} ${e.lastName}`.trim().toLowerCase().replace(/\s+/g, ' ');
-                const reverseFullName = `${e.lastName} ${e.firstName}`.trim().toLowerCase().replace(/\s+/g, ' ');
-                employeeNameMap.set(fullName, e);
-                if (fullName !== reverseFullName) {
-                    employeeNameMap.set(reverseFullName, e);
-                }
+                employeeNameMap.set(normalize(`${e.firstName} ${e.lastName}`), e);
+                employeeNameMap.set(normalize(`${e.lastName} ${e.firstName}`), e);
             });
 
             const assignmentsBySite = new Map<string, SiteAssignment[]>();
             const employeesToUpdateBySite = new Map<string, Set<string>>();
+            const skipped: string[] = [];
 
             for (const service of services) {
-                const site = siteNameMap.get(service.siteName.trim().toLowerCase());
-                const employee = employeeNameMap.get(service.employeeName.trim().toLowerCase().replace(/\s+/g, ' '));
+                const site = siteNameMap.get(normalize(service.siteName));
+                const employee = employeeNameMap.get(normalize(service.employeeName));
 
                 if (site && employee) {
                     if (!assignmentsBySite.has(site.id)) {
@@ -106,52 +134,49 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                         employeesToUpdateBySite.set(site.id, new Set());
                     }
                     assignmentsBySite.get(site.id)!.push({
+                        id: `asg-import-${Date.now()}-${Math.random()}`,
                         employeeId: employee.id,
                         workingHours: service.workingHours,
                         workingDays: service.workingDays,
                     });
                     employeesToUpdateBySite.get(site.id)!.add(employee.id);
+                } else {
+                     if (!site) skipped.push(`Cantiere non trovato: "${service.siteName}" (riga lavoratore: ${service.employeeName})`);
+                     if (!employee) skipped.push(`Lavoratore non trovato: "${service.employeeName}" (riga cantiere: ${service.siteName})`);
                 }
             }
 
-            if (assignmentsBySite.size === 0) {
-                 alert("Nessun servizio valido da importare. Controlla che i nomi dei cantieri e dei dipendenti nel file corrispondano a quelli nel sistema.");
-                 setIsSaving(false);
-                 handleCloseModals();
-                 return;
-            }
+            let successCount = 0;
+            if (assignmentsBySite.size > 0) {
+                 const sitesToUpdatePayload: WorkSite[] = [];
+                for (const [siteId, newAssignments] of assignmentsBySite.entries()) {
+                    const originalSite = sites.find(s => s.id === siteId)!;
+                    const employeesForThisSite = employeesToUpdateBySite.get(siteId)!;
 
-            const sitesToUpdatePayload: WorkSite[] = [];
-
-            for (const [siteId, newAssignments] of assignmentsBySite.entries()) {
-                const originalSite = sites.find(s => s.id === siteId)!;
-                const employeesForThisSite = employeesToUpdateBySite.get(siteId)!;
-
-                const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
+                    const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
+                    
+                    const updatedSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
+                    sitesToUpdatePayload.push(updatedSite);
+                }
+                const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
+                // FIX: Add explicit type to `updatedSitesFromApi` to prevent 'unknown' type on its elements.
+                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
                 
-                const updatedSite = {
-                    ...originalSite,
-                    assignments: [...existingAssignmentsToKeep, ...newAssignments],
-                };
-                sitesToUpdatePayload.push(updatedSite);
+                setSites(prev => {
+                    const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
+                    return prev.map(s => updatedSiteMap.get(s.id) || s);
+                });
+                // FIX: Correctly calculate the total number of successful assignments, as 'newAssignments' is out of scope.
+                successCount = Array.from(assignmentsBySite.values()).reduce((total, assignments) => total + assignments.length, 0);
             }
-            // FIX: Explicitly providing the generic type to `api.updateData` to help TypeScript infer the correct return type for Promise.all.
-            const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-            // FIX: Explicitly type the result of Promise.all to prevent type inference issues where the result could be treated as `unknown[]`.
-            const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
+            setImportResult({ success: successCount, skipped: [...new Set(skipped)] }); // Remove duplicates
             
-            setSites(prev => {
-                const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
-                return prev.map(s => updatedSiteMap.get(s.id) || s);
-            });
-
-            alert(`Importazione completata. ${updatedSitesFromApi.length} cantieri sono stati aggiornati.`);
-            handleCloseModals();
         } catch (error) {
             console.error("Failed to import services", error);
             alert("Importazione fallita. Si è verificato un errore imprevisto.");
         } finally {
             setIsSaving(false);
+            setIsImportModalOpen(false); // Close modal on finish
         }
     };
 
@@ -172,16 +197,38 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     <div className="flex-grow max-w-md">
                         <input 
                             type="text"
-                            placeholder="Cerca per cantiere o dipendente..."
+                            placeholder="Cerca cantiere..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full p-2 border border-gray-300 rounded-lg"
                         />
                     </div>
-                    <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                        <i className="fa-solid fa-file-import mr-2"></i>Importa Servizi
-                    </button>
+                     <div className="flex gap-2">
+                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                            <i className="fa-solid fa-file-import mr-2"></i>Importa Servizi
+                        </button>
+                         <button onClick={() => setIsSiteModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            <i className="fa-solid fa-plus mr-2"></i>Aggiungi Cantiere
+                        </button>
+                    </div>
                 </div>
+
+                 {importResult && (
+                    <div className={`p-4 rounded-lg mb-4 ${importResult.skipped.length > 0 ? 'bg-yellow-100' : 'bg-green-100'}`}>
+                        <h4 className="font-bold">{importResult.skipped.length > 0 ? 'Importazione Parziale' : 'Importazione Completata'}</h4>
+                        <p>{importResult.success} servizi sono stati importati/aggiornati con successo.</p>
+                        {importResult.skipped.length > 0 && (
+                            <div className="mt-2 text-sm">
+                                <p className="font-semibold">Righe saltate:</p>
+                                <ul className="list-disc list-inside max-h-24 overflow-y-auto">
+                                    {importResult.skipped.map((err, i) => <li key={i}>{err}</li>)}
+                                </ul>
+                            </div>
+                        )}
+                        <button onClick={() => setImportResult(null)} className="text-sm font-bold mt-2">Chiudi</button>
+                    </div>
+                )}
+
 
                 <div className="space-y-6">
                     {filteredSites.map(site => (
@@ -189,7 +236,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                             <div className="flex justify-between items-center mb-3">
                                 <h3 className="text-xl font-bold text-gray-800">{site.name}</h3>
                                 <button onClick={() => handleOpenAssignmentModal(site)} className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-md hover:bg-blue-200">
-                                    <i className="fa-solid fa-plus mr-2"></i>Aggiungi Servizio
+                                    <i className="fa-solid fa-plus mr-2"></i>Aggiungi Assegnazione
                                 </button>
                             </div>
                             
@@ -206,13 +253,13 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                                     </thead>
                                     <tbody>
                                     {site.assignments.map(assignment => (
-                                        <tr key={assignment.employeeId} className="border-t">
+                                        <tr key={assignment.id} className="border-t">
                                             <td className="p-2 font-medium">{employeeMap.get(assignment.employeeId) || 'N/A'}</td>
                                             <td className="p-2">{assignment.workingHours}</td>
                                             <td className="p-2">{assignment.workingDays.join(', ')}</td>
                                             <td className="p-2 text-center space-x-3">
                                                 <button onClick={() => handleOpenAssignmentModal(site, assignment)} className="text-yellow-600 hover:text-yellow-800" title="Modifica"><i className="fa-solid fa-pencil"></i></button>
-                                                <button onClick={() => handleDeleteAssignment(site.id, assignment.employeeId)} className="text-red-600 hover:text-red-800" title="Elimina"><i className="fa-solid fa-trash"></i></button>
+                                                <button onClick={() => handleDeleteAssignment(site.id, assignment.id)} className="text-red-600 hover:text-red-800" title="Elimina"><i className="fa-solid fa-trash"></i></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -220,7 +267,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                                 </table>
                                 </div>
                             ) : (
-                                <p className="text-center text-gray-500 italic py-4">Nessun servizio assegnato a questo cantiere.</p>
+                                <p className="text-center text-gray-500 italic py-4">Nessuna assegnazione per questo cantiere.</p>
                             )}
                         </div>
                     ))}
@@ -239,6 +286,17 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 />
             )}
             
+            {isSiteModalOpen && (
+                <SiteModal 
+                    isOpen={isSiteModalOpen}
+                    onClose={handleCloseModals}
+                    onSave={handleSaveSite}
+                    isSaving={isSaving}
+                    site={null}
+                    employees={employees}
+                />
+            )}
+
             {isImportModalOpen && (
                 <ServiceImportModal
                     isOpen={isImportModalOpen}

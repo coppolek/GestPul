@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../../types';
 
@@ -24,25 +23,16 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
     assignments: [],
   });
   
-  // State for managing the "add assignment" form
   const [newAssignment, setNewAssignment] = useState<{employeeId: string, workingHours: string, workingDays: string[]}>({ employeeId: '', workingHours: '08:00-12:00', workingDays: [] });
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   useEffect(() => {
     if (site) {
-      setFormData({
-        ...site,
-        endDate: site.endDate || '',
-      });
+      setFormData({ ...site, endDate: site.endDate || '' });
     } else {
-      // Reset form for new site
       setFormData({
-        name: '',
-        client: '',
-        address: '',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: '',
-        status: 'In Corso',
-        assignments: [],
+        name: '', client: '', address: '', startDate: new Date().toISOString().split('T')[0],
+        endDate: '', status: 'In Corso', assignments: [],
       });
     }
   }, [site]);
@@ -71,17 +61,22 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
         alert("Seleziona un dipendente e almeno un giorno lavorativo.");
         return;
     }
+    const assignmentWithId: SiteAssignment = {
+      ...newAssignment,
+      id: `asg-${Date.now()}`
+    };
     setFormData(prev => ({
         ...prev,
-        assignments: [...prev.assignments, newAssignment]
+        assignments: [...prev.assignments, assignmentWithId]
     }));
     setNewAssignment({ employeeId: '', workingHours: '08:00-12:00', workingDays: [] });
+    setEmployeeSearch('');
   };
   
-  const removeAssignment = (employeeId: string) => {
+  const removeAssignment = (assignmentId: string) => {
     setFormData(prev => ({
         ...prev,
-        assignments: prev.assignments.filter(a => a.employeeId !== employeeId)
+        assignments: prev.assignments.filter(a => a.id !== assignmentId)
     }));
   };
 
@@ -92,8 +87,9 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
 
   if (!isOpen) return null;
 
-  const assignedEmployeeIds = new Set(formData.assignments.map(a => a.employeeId));
-  const availableEmployees = employees.filter(e => !assignedEmployeeIds.has(e.id));
+  const filteredEmployees = employees.filter(e => 
+    `${e.firstName} ${e.lastName}`.toLowerCase().includes(employeeSearch.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center" onClick={onClose}>
@@ -136,33 +132,50 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
               </div>
             </div>
             
-            {/* Assignments Section */}
             <div>
-                <h3 className="text-lg font-semibold text-gray-700 mb-2 border-t pt-4">Assegnazioni Dipendenti</h3>
-                {/* List of current assignments */}
+                <h3 className="text-lg font-semibold text-gray-700 mb-2 border-t pt-4">Assegnazione Operatori</h3>
                 <div className="space-y-2 mb-4">
                     {formData.assignments.map(ass => (
-                        <div key={ass.employeeId} className="flex justify-between items-center p-2 bg-gray-100 rounded-lg">
+                        <div key={ass.id} className="flex justify-between items-center p-2 bg-gray-100 rounded-lg">
                             <div>
                                 <p className="font-semibold">{employees.find(e=>e.id === ass.employeeId)?.firstName} {employees.find(e=>e.id === ass.employeeId)?.lastName}</p>
                                 <p className="text-xs text-gray-600">{ass.workingHours} | {ass.workingDays.join(', ')}</p>
                             </div>
-                            <button type="button" onClick={() => removeAssignment(ass.employeeId)} className="text-red-500 hover:text-red-700"><i className="fa-solid fa-trash"></i></button>
+                            <button type="button" onClick={() => removeAssignment(ass.id)} className="text-red-500 hover:text-red-700"><i className="fa-solid fa-trash"></i></button>
                         </div>
                     ))}
-                    {formData.assignments.length === 0 && <p className="text-sm text-gray-500 italic">Nessun dipendente assegnato.</p>}
+                    {formData.assignments.length === 0 && <p className="text-sm text-gray-500 italic">Nessun operatore assegnato.</p>}
                 </div>
 
-                {/* Form to add new assignment */}
                 <div className="p-4 border border-dashed rounded-lg space-y-3">
                     <h4 className="font-semibold text-gray-600">Aggiungi nuovo</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Dipendente</label>
-                            <select name="employeeId" value={newAssignment.employeeId} onChange={handleAssignmentChange} className="w-full p-2 border border-gray-300 rounded-lg text-sm">
-                                <option value="">Seleziona...</option>
-                                {availableEmployees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
-                            </select>
+                         <div className="relative">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Cerca Operatore</label>
+                            <input
+                                type="text"
+                                placeholder="Digita per cercare..."
+                                value={employeeSearch}
+                                onChange={(e) => setEmployeeSearch(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                            {employeeSearch && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                    {filteredEmployees.map(emp => (
+                                        <div 
+                                            key={emp.id}
+                                            onClick={() => {
+                                                setNewAssignment(prev => ({...prev, employeeId: emp.id}));
+                                                setEmployeeSearch(`${emp.firstName} ${emp.lastName}`);
+                                            }}
+                                            className="p-2 hover:bg-blue-100 cursor-pointer text-sm"
+                                        >
+                                            {emp.firstName} {emp.lastName}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <input type="hidden" name="employeeId" value={newAssignment.employeeId} />
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">Orario (es. 08:00-12:00)</label>
@@ -180,7 +193,7 @@ const SiteModal: React.FC<SiteModalProps> = ({ isOpen, onClose, onSave, site, em
                          </div>
                     </div>
                      <div className="text-right">
-                        <button type="button" onClick={addAssignment} className="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">Aggiungi Assegnazione</button>
+                        <button type="button" onClick={addAssignment} className="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">Aggiungi</button>
                     </div>
                 </div>
             </div>

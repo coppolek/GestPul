@@ -14,6 +14,7 @@ export interface Employee {
 }
 
 export interface SiteAssignment {
+  id: string;
   employeeId: string;
   workingHours: string;
   workingDays: string[];
