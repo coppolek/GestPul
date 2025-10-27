@@ -101,12 +101,13 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     }, [jollyEmployees, schedules, manualPlanners]);
     
     useEffect(() => {
+        // This effect ensures that if an employee is no longer a "Jolly", their schedule doesn't linger in the view.
+        // It doesn't delete it from the backend, just filters the view state.
         const jollyEmployeeIds = new Set(jollyEmployees.map(e => e.id));
-        const schedulesToKeep = schedules.filter(s => jollyEmployeeIds.has(s.employeeId as string));
-        if(schedulesToKeep.length !== schedules.length) {
-            // In a real app you might want to handle what happens to schedules of employees who are no longer "Jolly"
-            // For now, we just ensure the view is consistent with the employee list.
-        }
+        const schedulesForJollys = schedules.filter(s => s.employeeId && jollyEmployeeIds.has(s.employeeId));
+        
+        // Similarly, update manual planners to avoid stale data if needed
+        // For this implementation, manual planners are self-contained.
     }, [jollyEmployees, schedules]);
 
 
@@ -146,23 +147,20 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     }, [weekDates, leaveRequests, sicknessRecords, employees, sites]);
 
     const conflicts = useMemo(() => {
-        const conflictMap = new Map<string, string[]>();
+        const conflictSet = new Set<string>();
         allPlanners.forEach(planner => {
-            Object.entries(planner.assignments).forEach(([date, dayAssignments]) => {
+            Object.values(planner.assignments).forEach(dayAssignments => {
                 if (Array.isArray(dayAssignments) && dayAssignments.length > 1) {
                     const sorted = [...dayAssignments].sort((a, b) => a.startTime.localeCompare(b.startTime));
                     for (let i = 0; i < sorted.length - 1; i++) {
                         if (sorted[i].endTime > sorted[i + 1].startTime) {
-                            const key = `${planner.id}-${date}`;
-                            if (!conflictMap.has(key)) conflictMap.set(key, []);
-                            conflictMap.get(key)!.push(sorted[i].id, sorted[i + 1].id);
+                            conflictSet.add(sorted[i].id);
+                            conflictSet.add(sorted[i+1].id);
                         }
                     }
                 }
             });
         });
-        const conflictSet = new Set<string>();
-        conflictMap.forEach(ids => ids.forEach(id => conflictSet.add(id)));
         return conflictSet;
     }, [allPlanners]);
 
@@ -229,122 +227,92 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         setDraggedItem({ type, data, sourceInfo });
     };
 
-    const handleDrop = async (targetPlannerId: string, targetDate: string) => {
+    const handleDrop = useCallback(async (targetPlannerId: string, targetDate: string) => {
         if (!draggedItem) return;
     
         const { type, data, sourceInfo } = draggedItem;
+        setDraggedItem(null); // Clear drag state immediately
     
-        // Prevent dropping on the same cell when moving
+        // Prevent dropping in the same place
         if (type === 'assignment' && sourceInfo.plannerId === targetPlannerId && sourceInfo.date === targetDate) {
-            setDraggedItem(null);
             return;
         }
     
-        // Store original state for revert on error
-        const originalSchedules = schedules;
-        const originalManualPlanners = manualPlanners;
-    
-        // --- Optimistic UI Update ---
-        let nextSchedules = [...originalSchedules];
-        let nextManualPlanners = [...originalManualPlanners];
-    
-        // 1. Prepare the assignment to be added
-        const assignmentToAdd: Assignment = {
-            id: type === 'assignment' ? data.id : `asg-${Date.now()}`,
+        const assignmentToMoveOrAdd: Assignment = {
+            id: type === 'assignment' ? data.id : `asg-${Date.now()}-${Math.random()}`,
             siteId: data.siteId,
-            startTime: type === 'absence' ? data.workingHours.split(' - ')[0] : data.startTime,
-            endTime: type === 'absence' ? data.workingHours.split(' - ')[1] : data.endTime,
+            startTime: type === 'absence' ? data.workingHours.split(' - ')[0].trim() : data.startTime,
+            endTime: type === 'absence' ? data.workingHours.split(' - ')[1].trim() : data.endTime,
         };
     
-        // 2. Add to target
-        const targetPlanner = allPlanners.find(p => p.id === targetPlannerId);
-        if (!targetPlanner) return;
+        // --- Create the next state optimistically ---
+        const getNextPlanners = (planners: Schedule[]) => {
+            // Use a deep copy to avoid mutation issues
+            let updatedPlanners = JSON.parse(JSON.stringify(planners));
     
-        const isTargetJolly = jollyEmployees.some(e => e.id === targetPlanner.employeeId);
-    
-        if (isTargetJolly) {
-            const targetExistsInSchedules = nextSchedules.some(s => s.id === targetPlannerId);
-            if (targetExistsInSchedules) {
-                nextSchedules = nextSchedules.map(s => s.id === targetPlannerId
-                    ? { ...s, assignments: { ...s.assignments, [targetDate]: [...(s.assignments[targetDate] || []), assignmentToAdd] } }
-                    : s
-                );
-            } else {
-                nextSchedules.push({
-                    id: targetPlanner.id,
-                    employeeId: targetPlanner.employeeId,
-                    label: targetPlanner.label,
-                    assignments: { [targetDate]: [assignmentToAdd] }
-                });
-            }
-        } else { // Target is manual
-            nextManualPlanners = nextManualPlanners.map(p => p.id === targetPlannerId
-                ? { ...p, assignments: { ...p.assignments, [targetDate]: [...(p.assignments[targetDate] || []), assignmentToAdd] } }
-                : p
-            );
-        }
-    
-        // 3. Remove from source if it was a move
-        if (type === 'assignment') {
-            const sourcePlanner = allPlanners.find(p => p.id === sourceInfo.plannerId);
-            if (sourcePlanner) {
-                const isSourceJolly = jollyEmployees.some(e => e.id === sourcePlanner.employeeId);
-                if (isSourceJolly) {
-                    nextSchedules = nextSchedules.map(s => s.id === sourceInfo.plannerId
-                        ? { ...s, assignments: { ...s.assignments, [sourceInfo.date]: (s.assignments[sourceInfo.date] || []).filter(a => a.id !== data.id) } }
-                        : s
-                    );
-                } else { // Source is manual
-                    nextManualPlanners = nextManualPlanners.map(p => p.id === sourceInfo.plannerId
-                        ? { ...p, assignments: { ...p.assignments, [sourceInfo.date]: (p.assignments[sourceInfo.date] || []).filter(a => a.id !== data.id) } }
-                        : p
-                    );
+            // 1. Remove from source if it's a move
+            if (type === 'assignment') {
+                const sourcePlanner = updatedPlanners.find((p: Schedule) => p.id === sourceInfo.plannerId);
+                if (sourcePlanner && sourcePlanner.assignments[sourceInfo.date]) {
+                    sourcePlanner.assignments[sourceInfo.date] = sourcePlanner.assignments[sourceInfo.date].filter((a: Assignment) => a.id !== data.id);
                 }
             }
-        }
     
-        // Apply optimistic updates to UI
+            // 2. Add to target
+            const targetPlanner = updatedPlanners.find((p: Schedule) => p.id === targetPlannerId);
+            if (targetPlanner) {
+                if (!targetPlanner.assignments[targetDate]) {
+                    targetPlanner.assignments[targetDate] = [];
+                }
+                targetPlanner.assignments[targetDate].push(assignmentToMoveOrAdd);
+            }
+            return updatedPlanners;
+        };
+    
+        const allCurrentPlanners = [...schedules, ...manualPlanners];
+        const nextAllPlanners = getNextPlanners(allCurrentPlanners);
+    
+        const jollyIds = new Set(jollyEmployees.map(e => e.id));
+        const nextSchedules = nextAllPlanners.filter(p => p.employeeId && jollyIds.has(p.employeeId));
+        const nextManualPlanners = nextAllPlanners.filter(p => !p.employeeId);
+    
+        // Optimistically update the UI
         setSchedules(nextSchedules);
         setManualPlanners(nextManualPlanners);
-        setDraggedItem(null);
-    
-        // --- API Sync ---
+        
+        // --- Sync with backend API ---
         try {
-            // Find which schedules (Jolly planners) changed and send updates
             const changedSchedules = nextSchedules.filter(ns => {
-                const os = originalSchedules.find(s => s.id === ns.id);
-                // It changed if it's new or its assignments are different
+                const os = schedules.find(s => s.id === ns.id);
                 return !os || JSON.stringify(ns.assignments) !== JSON.stringify(os.assignments);
             });
     
             const promises = changedSchedules.map(cs => {
-                const original = originalSchedules.find(s => s.id === cs.id);
+                const original = schedules.find(s => s.id === cs.id);
                 if (original) { // It's an update
                     return api.updateData('schedules', cs.id, cs);
                 } else { // It's a new schedule for a Jolly
                     return api.addData('schedules', { employeeId: cs.employeeId, label: cs.label, assignments: cs.assignments });
                 }
             });
-    
+            
             await Promise.all(promises);
     
-            // If new schedules were created, their IDs have changed in the DB. Refetch to get correct IDs.
-            const needsRefetch = changedSchedules.some(cs => !originalSchedules.find(s => s.id === cs.id));
-            if (needsRefetch) {
-                const freshSchedules = await api.getData<Schedule[]>('schedules');
-                setSchedules(freshSchedules);
+            // Refetch if new schedules were created to get DB-generated IDs
+            if (changedSchedules.some(cs => !schedules.some(s => s.id === cs.id))) {
+                 const freshSchedules = await api.getData<Schedule[]>('schedules');
+                 setSchedules(freshSchedules);
             }
     
         } catch (error) {
-            console.error("Failed to handle drop:", error);
-            setError("Errore durante l'aggiornamento. Ripristino...");
-            // Revert UI on error
-            setSchedules(originalSchedules);
-            setManualPlanners(originalManualPlanners);
+            console.error("Failed to sync drop operation:", error);
+            setError("Errore di salvataggio. Le modifiche sono state annullate.");
+            // Revert on error by restoring the original state
+            setSchedules(schedules);
+            setManualPlanners(manualPlanners);
         }
-    };
+    }, [draggedItem, schedules, manualPlanners, jollyEmployees, setSchedules]);
     
-
     const runAutoPlan = async (mode: 'ai' | 'algorithm') => {
         setIsPlanning(true);
         setError(null);

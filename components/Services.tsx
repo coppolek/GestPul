@@ -159,7 +159,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
+                // FIX: Explicitly cast the result of Promise.all to ensure correct type inference and prevent 'unknown' type errors.
+                const updatedSitesFromApi = (await Promise.all(updatePromises)) as WorkSite[];
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
