@@ -4,12 +4,13 @@ import { Employee, LeaveRequest, AbsenceType } from '../../types';
 interface LeaveRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (request: Omit<LeaveRequest, 'id' | 'status'>) => void;
+  onSave: (request: Omit<LeaveRequest, 'id' | 'status'> & { id?: string }) => void;
   employees: Employee[];
   isSaving: boolean;
+  request: LeaveRequest | null;
 }
 
-const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, onSave, employees, isSaving }) => {
+const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, onSave, employees, isSaving, request }) => {
   const [formData, setFormData] = useState({
     employeeId: '',
     type: AbsenceType.FERIE,
@@ -33,20 +34,32 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
     );
   }, [employees, employeeSearch]);
   
-  // Reset state when modal is opened
+  // Reset or populate state when modal is opened/request changes
   useEffect(() => {
     if (isOpen) {
-        setFormData({
-            employeeId: '',
-            type: AbsenceType.FERIE,
-            startDate: new Date().toISOString().split('T')[0],
-            endDate: new Date().toISOString().split('T')[0],
-            reason: '',
-        });
-        setEmployeeSearch('');
+        if (request) {
+            setFormData({
+                employeeId: request.employeeId,
+                type: request.type,
+                startDate: request.startDate,
+                endDate: request.endDate,
+                reason: request.reason || '',
+            });
+            const employee = employees.find(e => e.id === request.employeeId);
+            setEmployeeSearch(employee ? `${employee.firstName} ${employee.lastName}` : '');
+        } else {
+            setFormData({
+                employeeId: '',
+                type: AbsenceType.FERIE,
+                startDate: new Date().toISOString().split('T')[0],
+                endDate: new Date().toISOString().split('T')[0],
+                reason: '',
+            });
+            setEmployeeSearch('');
+        }
         setIsEmployeeDropdownOpen(false);
     }
-  }, [isOpen]);
+  }, [isOpen, request, employees]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -86,7 +99,7 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
       alert('Selezionare un dipendente valido dalla lista.');
       return;
     }
-    onSave(formData);
+    onSave({ ...formData, id: request?.id });
   };
 
   if (!isOpen) return null;
@@ -95,7 +108,7 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center" onClick={onClose}>
       <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Nuova Richiesta</h2>
+            <h2 className="text-2xl font-bold text-gray-800">{request ? 'Modifica Richiesta' : 'Nuova Richiesta'}</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl" disabled={isSaving}>&times;</button>
         </div>
         
@@ -110,10 +123,11 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
                     onChange={handleEmployeeSearchChange}
                     onFocus={() => setIsEmployeeDropdownOpen(true)}
                     placeholder="Cerca dipendente..."
-                    className="w-full p-2 border border-gray-300 rounded-lg"
+                    className="w-full p-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
                     autoComplete="off"
+                    disabled={isSaving || !!request}
                 />
-                {isEmployeeDropdownOpen && (
+                {isEmployeeDropdownOpen && !request && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                         {filteredEmployees.length > 0 ? (
                             filteredEmployees.map(emp => (
@@ -156,7 +170,7 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
           <div className="mt-8 flex justify-end space-x-4">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300" disabled={isSaving}>Annulla</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed w-40" disabled={isSaving}>
-                 {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Invia Richiesta'}
+                 {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : (request ? 'Salva Modifiche' : 'Invia Richiesta')}
             </button>
           </div>
         </form>

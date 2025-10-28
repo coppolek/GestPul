@@ -12,22 +12,60 @@ interface LeaveRequestsProps {
 const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests, setLeaveRequests }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const employeeMap = useMemo(() => new Map(employees.map(emp => [emp.id, `${emp.firstName} ${emp.lastName}`])), [employees]);
 
-  const handleSaveRequest = async (requestData: Omit<LeaveRequest, 'id' | 'status'>) => {
+  const handleOpenModal = (request: LeaveRequest | null = null) => {
+    setSelectedRequest(request);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedRequest(null);
+    setIsModalOpen(false);
+  };
+
+  const handleSaveRequest = async (requestData: Omit<LeaveRequest, 'id' | 'status'> & { id?: string }) => {
     setIsSaving(true);
     try {
-        const newRequest = await api.addData<Omit<LeaveRequest, 'id'>, LeaveRequest>('leaveRequests', {
-            ...requestData,
-            status: AbsenceStatus.IN_ATTESA,
-        });
-        setLeaveRequests(prev => [...prev, newRequest].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
-        setIsModalOpen(false);
+        if (requestData.id) {
+            // Edit
+            const originalRequest = leaveRequests.find(r => r.id === requestData.id);
+            if (!originalRequest) throw new Error("Request not found");
+
+            const updatedRequestData = {
+                ...originalRequest,
+                ...requestData,
+            };
+            
+            const updatedRequest = await api.updateData<LeaveRequest>('leaveRequests', requestData.id, updatedRequestData);
+            setLeaveRequests(prev => prev.map(r => r.id === updatedRequest.id ? updatedRequest : r));
+        } else {
+            // Add
+            const newRequest = await api.addData<Omit<LeaveRequest, 'id'>, LeaveRequest>('leaveRequests', {
+                ...requestData,
+                status: AbsenceStatus.IN_ATTESA,
+            });
+            setLeaveRequests(prev => [...prev, newRequest].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+        }
+        handleCloseModal();
     } catch (error) {
         console.error("Failed to save leave request", error);
         alert("Salvataggio richiesta fallito. Riprova.");
     } finally {
         setIsSaving(false);
+    }
+  };
+
+  const handleDeleteRequest = async (requestId: string) => {
+    if (window.confirm('Sei sicuro di voler eliminare questa richiesta?')) {
+        try {
+            await api.deleteData('leaveRequests', requestId);
+            setLeaveRequests(prev => prev.filter(r => r.id !== requestId));
+        } catch (error) {
+            console.error("Failed to delete leave request", error);
+            alert("Eliminazione fallita. Riprova.");
+        }
     }
   };
 
@@ -62,7 +100,7 @@ const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests,
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Richieste Ferie e Permessi</h2>
-          <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <i className="fa-solid fa-plus mr-2"></i>Nuova Richiesta
           </button>
         </div>
@@ -94,6 +132,8 @@ const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests,
                         <button onClick={() => handleStatusChange(request.id, AbsenceStatus.RIFIUTATO)} className="text-red-600 hover:text-red-800" title="Rifiuta"><i className="fa-solid fa-times-circle"></i></button>
                       </>
                     )}
+                    <button onClick={() => handleOpenModal(request)} className="text-yellow-600 hover:text-yellow-800" title="Modifica"><i className="fa-solid fa-pencil"></i></button>
+                    <button onClick={() => handleDeleteRequest(request.id)} className="text-red-600 hover:text-red-800" title="Elimina"><i className="fa-solid fa-trash"></i></button>
                   </td>
                 </tr>
               ))}
@@ -105,10 +145,11 @@ const LeaveRequests: React.FC<LeaveRequestsProps> = ({ employees, leaveRequests,
       {isModalOpen && (
         <LeaveRequestModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleCloseModal}
           onSave={handleSaveRequest}
           employees={employees}
           isSaving={isSaving}
+          request={selectedRequest}
         />
       )}
     </>
