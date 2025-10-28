@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
@@ -533,7 +534,13 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                         </button>
                         {isPlanDropdownOpen && (
                             <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 border">
-                                <button onClick={() => runAutoPlan('ai')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Usa AI (Gemini)</button>
+                                <button 
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-400 cursor-not-allowed"
+                                    disabled
+                                    title="Funzionalità AI disabilitata"
+                                >
+                                    Usa AI (Gemini)
+                                </button>
                                 <button onClick={() => runAutoPlan('algorithm')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Usa Algoritmo (Veloce)</button>
                             </div>
                         )}

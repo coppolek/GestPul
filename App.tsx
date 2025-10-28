@@ -94,7 +94,7 @@ const MainLayout: React.FC = () => {
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </main>
-                {user?.role !== 'Lavoratore' && <ChatBot apiKeys={apiKeys} />}
+                {/* {user?.role !== 'Lavoratore' && <ChatBot apiKeys={apiKeys} />} */}
             </div>
         </div>
     );

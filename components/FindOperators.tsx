@@ -148,58 +148,62 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
                 Trova i 20 operatori disponibili più vicini a un nuovo cantiere tramite algoritmo.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 border rounded-lg bg-gray-50">
-                 <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo del nuovo cantiere (obbligatorio)</label>
-                    <input
-                        type="text"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="Es. Via Roma 1, Milano"
-                        className="w-full p-2 border border-gray-300 rounded-lg"
-                        disabled={isLoading}
-                    />
-                </div>
-                <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Fascia oraria richiesta (es. 08:00-17:00)</label>
-                    <input
-                        type="text"
-                        value={workingHours}
-                        onChange={(e) => setWorkingHours(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
-                        disabled={isLoading}
-                    />
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Giorni di lavoro richiesti</label>
-                    <div className="flex flex-wrap gap-2">
-                        {ALL_DAYS.map(day => (
-                            <button
-                                key={day}
-                                onClick={() => handleDayToggle(day)}
-                                disabled={isLoading}
-                                className={`px-3 py-1 text-sm rounded-full border transition-colors ${
-                                    workingDays.includes(day)
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-white hover:bg-gray-100 border-gray-300'
-                                }`}
-                            >
-                                {day}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+            <div className="p-4 mb-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-lg">
+                <p className="font-bold">Funzionalità Disabilitata</p>
+                <p>Questa funzionalità utilizza API a pagamento ed è stata disabilitata come richiesto.</p>
             </div>
 
-             <div className="text-right">
-                <button
-                    onClick={handleSearch}
-                    disabled={isLoading || workingDays.length === 0 || !address.trim()}
-                    className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-w-[150px]"
-                >
-                    {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-search mr-2"></i>Cerca Operatori</>}
-                </button>
-            </div>
+            <fieldset disabled>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 border rounded-lg bg-gray-50">
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo del nuovo cantiere (obbligatorio)</label>
+                        <input
+                            type="text"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder="Es. Via Roma 1, Milano"
+                            className="w-full p-2 border border-gray-300 rounded-lg"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Fascia oraria richiesta (es. 08:00-17:00)</label>
+                        <input
+                            type="text"
+                            value={workingHours}
+                            onChange={(e) => setWorkingHours(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-lg"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Giorni di lavoro richiesti</label>
+                        <div className="flex flex-wrap gap-2">
+                            {ALL_DAYS.map(day => (
+                                <button
+                                    key={day}
+                                    onClick={() => handleDayToggle(day)}
+                                    className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                                        workingDays.includes(day)
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white hover:bg-gray-100 border-gray-300'
+                                    }`}
+                                >
+                                    {day}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="text-right">
+                    <button
+                        onClick={handleSearch}
+                        disabled
+                        className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-w-[150px]"
+                    >
+                        <i className="fa-solid fa-search mr-2"></i>Cerca Operatori
+                    </button>
+                </div>
+            </fieldset>
             
             {error && <div className="mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">{error}</div>}
             
