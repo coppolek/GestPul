@@ -131,3 +131,18 @@ export const deleteData = async (collection: CollectionName, id: string): Promis
     (db[collection] as any) = filteredItems;
     saveDb(db);
 };
+
+// --- Full DB Management ---
+export const exportDbAsString = (): string => {
+    return localStorage.getItem(DB_KEY) || JSON.stringify(initialData);
+};
+
+export const importDbFromString = (jsonString: string): void => {
+    // Basic validation
+    JSON.parse(jsonString); // Will throw an error if invalid JSON
+    localStorage.setItem(DB_KEY, jsonString);
+};
+
+export const clearDb = (): void => {
+    localStorage.removeItem(DB_KEY);
+};

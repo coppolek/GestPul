@@ -13,11 +13,13 @@ import SiteList from './components/SiteList';
 import LeaveRequests from './components/absences/LeaveRequests';
 import Sickness from './components/absences/Sickness';
 import WeeklyAbsences from './components/absences/WeeklyAbsences';
+import LeaveRequestStats from './components/absences/LeaveRequestStats';
 import JollyPlans from './components/JollyPlans';
 import FindOperators from './components/FindOperators';
 import UserList from './components/UserList';
 import ApiSettings from './components/ApiSettings';
 import ChatBot from './components/ChatBot';
+import DatabaseSettings from './components/DatabaseSettings';
 
 const App: React.FC = () => {
     const { user, authLoading } = useAuth();
@@ -79,6 +81,7 @@ const MainLayout: React.FC = () => {
                         <Route path="/assenze/richieste" element={<LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />} />
                         <Route path="/assenze/malattie" element={<Sickness employees={employees} sicknessRecords={sicknessRecords} setSicknessRecords={setSicknessRecords} />} />
                         <Route path="/assenze/riepilogo" element={<WeeklyAbsences employees={employees} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} />} />
+                        <Route path="/assenze/statistiche" element={<LeaveRequestStats employees={employees} leaveRequests={leaveRequests} />} />
                        
                         <Route path="/pianificazione-jolly" element={<JollyPlans employees={employees} sites={sites} leaveRequests={leaveRequests} sicknessRecords={sicknessRecords} schedules={schedules} setSchedules={setSchedules} apiKeys={apiKeys} />} />
                         <Route path="/trova-operatori" element={<FindOperators employees={employees} sites={sites} apiKeys={apiKeys} />} />
@@ -86,6 +89,7 @@ const MainLayout: React.FC = () => {
                         <Route path="/impostazioni" element={<Navigate to="/impostazioni/utenti" />} />
                         <Route path="/impostazioni/utenti" element={<UserList users={users} setUsers={setUsers} employees={employees} />} />
                         <Route path="/impostazioni/api" element={<ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} />} />
+                        <Route path="/impostazioni/database" element={<DatabaseSettings />} />
 
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
@@ -112,6 +116,7 @@ const Sidebar: React.FC = () => {
                 { path: '/assenze/richieste', label: 'Richieste' },
                 { path: '/assenze/malattie', label: 'Malattie' },
                 { path: '/assenze/riepilogo', label: 'Riepilogo Sett.' },
+                { path: '/assenze/statistiche', label: 'Statistiche' },
             ]
         },
         { path: '/pianificazione-jolly', icon: 'fa-calendar-alt', label: 'Pianificazione Jolly', roles: ['Amministratore', 'Responsabile'] },
@@ -124,6 +129,7 @@ const Sidebar: React.FC = () => {
             subItems: [
                 { path: '/impostazioni/utenti', label: 'Utenti' },
                 { path: '/impostazioni/api', label: 'API' },
+                { path: '/impostazioni/database', label: 'Database' },
             ]
         },
     ];

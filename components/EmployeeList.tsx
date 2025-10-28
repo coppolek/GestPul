@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Employee, WorkSite } from '../types';
 import EmployeeModal from './modals/EmployeeModal';
@@ -17,6 +18,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [siteFilter, setSiteFilter] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleOpenModal = (employee: Employee | null = null) => {
@@ -122,11 +124,24 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
   };
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter(emp => 
-      `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.role.toLowerCase().includes(searchTerm.toLowerCase())
+    let employeesToFilter = employees;
+
+    // Filter by site first
+    if (siteFilter) {
+      const assignedEmployeeIds = new Set(
+        sites.find(s => s.id === siteFilter)?.assignments.map(a => a.employeeId) ?? []
+      );
+      employeesToFilter = employees.filter(emp => assignedEmployeeIds.has(emp.id));
+    }
+
+    // Then filter by search term
+    const lowercasedTerm = searchTerm.toLowerCase();
+    return employeesToFilter.filter(emp => 
+      `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(lowercasedTerm) ||
+      emp.role.toLowerCase().includes(lowercasedTerm) ||
+      (emp.notes && emp.notes.toLowerCase().includes(lowercasedTerm))
     );
-  }, [employees, searchTerm]);
+  }, [employees, sites, searchTerm, siteFilter]);
 
 
   return (
@@ -134,14 +149,25 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, setEmployees, si
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <div className="flex justify-between items-center mb-6 gap-4 flex-wrap">
           <h2 className="text-2xl font-bold text-gray-800">Elenco Dipendenti</h2>
-          <div className="flex-grow max-w-md">
+          <div className="flex-grow flex flex-wrap gap-4 sm:flex-nowrap" style={{maxWidth: '40rem'}}>
             <input 
               type="text"
-              placeholder="Cerca per nome o ruolo..."
+              placeholder="Cerca per nome, ruolo o note..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-lg"
             />
+            <select
+              value={siteFilter}
+              onChange={(e) => setSiteFilter(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+              aria-label="Filtra per cantiere"
+            >
+              <option value="">Tutti i cantieri</option>
+              {sites.map(site => (
+                <option key={site.id} value={site.id}>{site.name}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">

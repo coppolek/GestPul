@@ -116,7 +116,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
             const today = new Date();
             const nextYear = new Date(new Date().setFullYear(today.getFullYear() + 1));
 
-            return {
+            // FIX: Explicitly type the new employee object to match Omit<Employee, 'id'>.
+            // This resolves issues with type inference for 'role' (string vs union) and optional properties like 'notes'.
+            const newEmployee: Omit<Employee, 'id'> = {
                 firstName: firstName,
                 lastName: lastName,
                 role: 'Operatore',
@@ -129,6 +131,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, is
                 notes: '',
                 endDate: '',
             };
+            return newEmployee;
         }).filter((emp): emp is Omit<Employee, 'id'> => emp !== null);
 
         onImport(importedEmployees);
