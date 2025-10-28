@@ -112,7 +112,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
 
 
     const uncoveredShifts = useMemo(() => {
-        const shifts: { date: string; siteId: string; siteName: string; employeeName: string; workingHours: string }[] = [];
+        const shifts: { date: string; siteId: string; siteName: string; employeeName: string; workingHours: string; weeklyHours: number; }[] = [];
         const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
         [...leaveRequests, ...sicknessRecords].forEach(absence => {
@@ -129,7 +129,17 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                     const operatorAssignments = sites.flatMap(s => 
                         s.assignments
                          .filter(a => a.employeeId === absence.employeeId && a.workingDays.includes(dayOfWeek))
-                         .map(a => ({ siteId: s.id, siteName: s.name, workingHours: a.workingHours }))
+                         .map(a => {
+                            const [start, end] = a.workingHours.split(' - ');
+                            const dailyHours = calculateHours(start, end);
+                            const weeklyHours = dailyHours * a.workingDays.length;
+                             return { 
+                                siteId: s.id, 
+                                siteName: s.name, 
+                                workingHours: a.workingHours,
+                                weeklyHours: weeklyHours
+                            }
+                         })
                     );
                     
                     operatorAssignments.forEach(opAss => {
@@ -539,7 +549,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                         <tr className="bg-gray-50">
                             <th className="p-2 border text-left font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 w-48">Planner</th>
                             {weekDates.map(date => <th key={date.toISOString()} className="p-2 border font-semibold capitalize w-48 text-gray-600">{dayFormatter.format(date)}<span className="block text-xs font-normal">{dateFormatter.format(date)}</span></th>)}
-                             <th className="p-2 border font-semibold text-gray-600 w-24">Tot. Ore</th>
+                             <th className="p-2 border font-semibold text-gray-600 w-32">Totale Settimanale</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -553,9 +563,15 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                         const duration = calculateHours(start, end);
                                         return (
                                             <div key={i} draggable onDragStart={() => handleDragStart('absence', shift, null)} className="p-1.5 bg-yellow-100 rounded text-xs cursor-grab mb-1">
-                                                <p className="font-semibold text-yellow-900">{shift.siteName}</p>
+                                                <div className="flex justify-between items-start">
+                                                    <p className="font-semibold text-yellow-900">{shift.siteName}</p>
+                                                    <div className="text-right flex-shrink-0 ml-2">
+                                                        <p className="font-bold text-yellow-900">{shift.weeklyHours.toFixed(2)}h</p>
+                                                        <p className="text-yellow-700 text-[10px]">settimanali</p>
+                                                    </div>
+                                                </div>
                                                 <p className="text-yellow-700 italic">Assente: {shift.employeeName}</p>
-                                                <div className="flex justify-between items-center">
+                                                <div className="flex justify-between items-center mt-1">
                                                     <p className="text-yellow-800">{shift.workingHours}</p>
                                                     {duration > 0 && <p className="font-bold text-yellow-900">{duration.toFixed(2)}h</p>}
                                                 </div>
@@ -623,6 +639,40 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             )
                         })}
                     </tbody>
+                    <tfoot>
+                        <tr className="bg-gray-200 font-bold text-gray-800">
+                            <td colSpan={9} className="p-2 border text-left sticky left-0 bg-gray-200 z-10">
+                                Riepilogo Totali per Operatore
+                            </td>
+                        </tr>
+                        {allPlanners.map(planner => {
+                            const weeklyTotal = weekDates.reduce((total, date) => {
+                                const dateStr = date.toISOString().split('T')[0];
+                                const dayAssignments = planner.assignments[dateStr] || [];
+                                const dayHours = Array.isArray(dayAssignments) ? dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0) : 0;
+                                return total + dayHours;
+                            }, 0);
+
+                            if (weeklyTotal === 0) return null;
+
+                            return (
+                                <tr key={`footer-${planner.id}`} className="bg-gray-50 font-medium">
+                                    <td className="p-2 border sticky left-0 bg-gray-50 z-10 w-48">{planner.label}</td>
+                                    {weekDates.map(date => {
+                                        const dateStr = date.toISOString().split('T')[0];
+                                        const dayAssignments = planner.assignments[dateStr] || [];
+                                        const dailyTotal = Array.isArray(dayAssignments) ? dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0) : 0;
+                                        return (
+                                            <td key={date.toISOString()} className="p-2 border text-center">
+                                                {dailyTotal > 0 ? dailyTotal.toFixed(2) + 'h' : '-'}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="p-2 border text-center font-bold bg-gray-100">{weeklyTotal.toFixed(2)}h</td>
+                                </tr>
+                            );
+                        })}
+                    </tfoot>
                 </table>
             </div>
         </div>

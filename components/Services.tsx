@@ -160,11 +160,11 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Explicitly typing the awaited result from Promise.all ensures correct type inference. Without it, the result can be inferred as 'unknown[]', causing type errors when accessing properties.
-                const updatedSitesFromApi = await Promise.all(updatePromises);
+                // FIX: Explicitly annotating the variable's type is a more robust way to handle type inference issues from Promise.all.
+                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
                 
                 setSites(prev => {
-                    const updatedSiteMap = new Map(updatedSitesFromApi.map((s: WorkSite) => [s.id, s]));
+                    const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
                     return prev.map(s => updatedSiteMap.get(s.id) || s);
                 });
                 successCount = Array.from(assignmentsBySite.values()).reduce((total, assignments) => total + assignments.length, 0);
