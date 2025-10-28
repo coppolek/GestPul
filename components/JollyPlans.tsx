@@ -130,7 +130,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                         s.assignments
                          .filter(a => a.employeeId === absence.employeeId && a.workingDays.includes(dayOfWeek))
                          .map(a => {
-                            const [start, end] = a.workingHours.split(' - ');
+                            const hours = a.workingHours.split(/\s*-\s*/);
+                            const start = hours[0];
+                            const end = hours[1];
                             const dailyHours = calculateHours(start, end);
                             const weeklyHours = dailyHours * a.workingDays.length;
                              return { 
@@ -247,12 +249,14 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         if (type === 'assignment' && sourceInfo.plannerId === targetPlannerId && sourceInfo.date === targetDate) {
             return;
         }
-    
+        
+        const hours = (type === 'absence' ? data.workingHours : `${data.startTime}-${data.endTime}`).split(/\s*-\s*/);
+
         const assignmentToMoveOrAdd: Assignment = {
             id: type === 'assignment' ? data.id : `asg-${Date.now()}-${Math.random()}`,
             siteId: data.siteId,
-            startTime: type === 'absence' ? data.workingHours.split(' - ')[0].trim() : data.startTime,
-            endTime: type === 'absence' ? data.workingHours.split(' - ')[1].trim() : data.endTime,
+            startTime: hours[0],
+            endTime: hours[1],
             originalEmployeeName: type === 'absence' ? data.employeeName : data.originalEmployeeName,
         };
     
@@ -462,7 +466,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             }
     
             if (bestJollyId) {
-                const [startTime, endTime] = shift.workingHours.split(' - ');
+                const hours = shift.workingHours.split(/\s*-\s*/);
+                const startTime = hours[0];
+                const endTime = hours[1];
                 const newAssignment = { 
                     siteId: shift.siteId, 
                     startTime, 
@@ -559,7 +565,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             {weekDates.map(date => (
                                 <td key={date.toISOString()} className="p-2 border align-top">
                                     {uncoveredShifts.filter(s => s.date === date.toISOString().split('T')[0]).map((shift, i) => {
-                                        const [start, end] = shift.workingHours.split(' - ');
+                                        const hours = shift.workingHours.split(/\s*-\s*/);
+                                        const start = hours[0];
+                                        const end = hours[1];
                                         const duration = calculateHours(start, end);
                                         return (
                                             <div key={i} draggable onDragStart={() => handleDragStart('absence', shift, null)} className="p-1.5 bg-yellow-100 rounded text-xs cursor-grab mb-1">
