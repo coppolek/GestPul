@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
@@ -7,23 +6,32 @@ import { GoogleGenAI } from '@google/genai';
 
 // --- Helper Functions ---
 
+// NEW UTC-centric date week getter
 const getWeekDates = (currentDate: Date): Date[] => {
-    const startOfWeek = new Date(currentDate);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
+    // Use local date parts to construct a UTC date to avoid timezone shifts from the initial `new Date()`
+    const start = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()));
+    const day = start.getUTCDay(); // 0 for Sunday, 1 for Monday...
+    const diff = start.getUTCDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), diff));
+
     const weekDates: Date[] = [];
     for (let i = 0; i < 7; i++) {
         const date = new Date(startOfWeek);
-        date.setDate(startOfWeek.getDate() + i);
+        date.setUTCDate(startOfWeek.getUTCDate() + i);
         weekDates.push(date);
     }
     return weekDates;
 };
 
-const dayFormatter = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
-const dateFormatter = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: '2-digit' });
+// NEW UTC-centric date formatter for logic
+const toUTCISOString = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+};
+
+
+// Updated formatters for display, using UTC to match the logic dates
+const dayFormatter = new Intl.DateTimeFormat('it-IT', { weekday: 'short', timeZone: 'UTC' });
+const dateFormatter = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
 
 const calculateHours = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -121,11 +129,11 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
              if (employee?.role !== 'Operatore') return;
 
              for (const date of weekDates) {
-                const dateStr = date.toISOString().split('T')[0];
+                const dateStr = toUTCISOString(date);
                 if (dateStr >= absence.startDate && dateStr <= absence.endDate) {
                     if('status' in absence && absence.status !== AbsenceStatus.APPROVATO) continue;
                     
-                    const dayOfWeek = capitalize(new Intl.DateTimeFormat('it-IT', { weekday: 'long' }).format(date));
+                    const dayOfWeek = capitalize(new Intl.DateTimeFormat('it-IT', { weekday: 'long', timeZone: 'UTC' }).format(date));
 
                     const operatorAssignments = sites.flatMap(s => 
                         s.assignments
@@ -444,7 +452,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     
         const jollyWorkload: Record<string, number> = jollyEmployees.reduce((acc, j) => {
             const weeklyTotal = weekDates.reduce((total, date) => {
-                const dayStr = date.toISOString().split('T')[0];
+                const dayStr = toUTCISOString(date);
                 const schedule = schedules.find(s => s.employeeId === j.id);
                 const dayAssignments = schedule?.assignments[dayStr] || [];
                 return total + dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0);
@@ -571,7 +579,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             <td className="p-2 border font-bold text-yellow-800 sticky left-0 bg-yellow-50 z-10 w-48 align-top"><i className="fa-solid fa-person-walking-arrow-right mr-2"></i>Turni Scoperti</td>
                             {weekDates.map(date => (
                                 <td key={date.toISOString()} className="p-2 border align-top">
-                                    {uncoveredShifts.filter(s => s.date === date.toISOString().split('T')[0]).map((shift, i) => {
+                                    {uncoveredShifts.filter(s => s.date === toUTCISOString(date)).map((shift, i) => {
                                         const hours = shift.workingHours.split(/\s*-\s*/);
                                         const start = hours[0];
                                         const end = hours[1];
@@ -600,7 +608,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                         {/* Planners */}
                         {allPlanners.map(planner => {
                              const weeklyTotal = weekDates.reduce((total, date) => {
-                                const dayStr = date.toISOString().split('T')[0];
+                                const dayStr = toUTCISOString(date);
                                 const dayAssignments = planner.assignments[dayStr] || [];
                                 const dayHours = Array.isArray(dayAssignments) ? dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0) : 0;
                                 return total + dayHours;
@@ -613,7 +621,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                         {!planner.employeeId && <button onClick={() => setManualPlanners(p => p.filter(mp => mp.id !== planner.id))} className="ml-2 text-red-500 text-xs"><i className="fa fa-trash"></i></button>}
                                     </td>
                                     {weekDates.map(date => {
-                                        const dateStr = date.toISOString().split('T')[0];
+                                        const dateStr = toUTCISOString(date);
                                         const dayAssignments = planner.assignments[dateStr] || [];
                                         const dailyTotal = Array.isArray(dayAssignments) ? dayAssignments.reduce((total, ass) => total + calculateHours(ass.startTime, ass.endTime), 0) : 0;
                                         return (
@@ -662,7 +670,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                         </tr>
                         {allPlanners.map(planner => {
                             const weeklyTotal = weekDates.reduce((total, date) => {
-                                const dateStr = date.toISOString().split('T')[0];
+                                const dateStr = toUTCISOString(date);
                                 const dayAssignments = planner.assignments[dateStr] || [];
                                 const dayHours = Array.isArray(dayAssignments) ? dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0) : 0;
                                 return total + dayHours;
@@ -674,7 +682,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                 <tr key={`footer-${planner.id}`} className="bg-gray-50 font-medium">
                                     <td className="p-2 border sticky left-0 bg-gray-50 z-10 w-48">{planner.label}</td>
                                     {weekDates.map(date => {
-                                        const dateStr = date.toISOString().split('T')[0];
+                                        const dateStr = toUTCISOString(date);
                                         const dayAssignments = planner.assignments[dateStr] || [];
                                         const dailyTotal = Array.isArray(dayAssignments) ? dayAssignments.reduce((dayTotal, ass) => dayTotal + calculateHours(ass.startTime, ass.endTime), 0) : 0;
                                         return (
