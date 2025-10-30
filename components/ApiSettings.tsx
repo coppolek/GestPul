@@ -22,7 +22,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [mapsKey, setMapsKey] = useState('');
     const [isMapsKeyVisible, setIsMapsKeyVisible] = useState(false);
     const [isSavingMaps, setIsSavingMaps] = useState(false);
-    const [saveMapsResult, setSaveMapsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [mapsResult, setMapsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     // OpenRouteService State
     const orsApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'open_route_service'), [apiKeys]);
@@ -33,6 +33,10 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [orsResult, setOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [activeDistanceService, setActiveDistanceService] = useState<'ors' | 'maps'>('ors');
+    
+    // Global Save State
+    const [isSavingAll, setIsSavingAll] = useState(false);
+    const [allResult, setAllResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
 
     useEffect(() => {
@@ -44,8 +48,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
 
     const clearResults = () => {
         setGeminiResult(null);
-        setSaveMapsResult(null);
+        setMapsResult(null);
         setOrsResult(null);
+        setAllResult(null);
     }
 
     const handleTestGeminiConnection = async () => {
@@ -131,10 +136,10 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
             const updatedKey = { ...mapsApiKeyObject, key: mapsKey };
             const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
             setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
-            setSaveMapsResult({ type: 'success', message: 'Chiave API Maps salvata con successo!' });
+            setMapsResult({ type: 'success', message: 'Chiave API Maps salvata con successo!' });
         } catch (error) {
             console.error("Failed to save API key:", error);
-            setSaveMapsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+            setMapsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
         } finally {
             setIsSavingMaps(false);
         }
@@ -158,7 +163,49 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
         }
     };
 
-    const isAnyActionInProgress = isTestingGemini || isSavingGemini || isSavingMaps || isTestingOrs || isSavingOrs;
+    const handleSaveAllKeys = async () => {
+        setIsSavingAll(true);
+        clearResults();
+
+        const promises = [];
+        let keysHaveChanged = false;
+
+        if (geminiApiKeyObject && geminiKey !== geminiApiKeyObject.key) {
+            const updatedKey = { ...geminiApiKeyObject, key: geminiKey };
+            promises.push(api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey));
+            keysHaveChanged = true;
+        }
+        if (mapsApiKeyObject && mapsKey !== mapsApiKeyObject.key) {
+            const updatedKey = { ...mapsApiKeyObject, key: mapsKey };
+            promises.push(api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey));
+            keysHaveChanged = true;
+        }
+        if (orsApiKeyObject && orsKey !== orsApiKeyObject.key) {
+            const updatedKey = { ...orsApiKeyObject, key: orsKey };
+            promises.push(api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey));
+            keysHaveChanged = true;
+        }
+
+        if (!keysHaveChanged) {
+            setAllResult({ type: 'success', message: 'Nessuna modifica da salvare.' });
+            setIsSavingAll(false);
+            return;
+        }
+
+        try {
+            await Promise.all(promises);
+            const freshApiKeys = await api.getData<ApiKey[]>('apiKeys');
+            setApiKeys(freshApiKeys);
+            setAllResult({ type: 'success', message: 'Tutte le modifiche sono state salvate con successo!' });
+        } catch (error) {
+            console.error("Failed to save all API keys:", error);
+            setAllResult({ type: 'error', message: 'Salvataggio di una o più chiavi fallito. Riprova.' });
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    const isAnyActionInProgress = isTestingGemini || isSavingGemini || isSavingMaps || isTestingOrs || isSavingOrs || isSavingAll;
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto space-y-8">
@@ -310,9 +357,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                             </div>
                         </div>
 
-                        {saveMapsResult && (
-                            <div className={`p-3 rounded-lg text-sm ${saveMapsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {saveMapsResult.message}
+                        {mapsResult && (
+                            <div className={`p-3 rounded-lg text-sm ${mapsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {mapsResult.message}
                             </div>
                         )}
                         
@@ -330,6 +377,25 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                         </div>
                     </div>
                 )}
+            </div>
+            
+            {/* Global Save Section */}
+            <div className="p-4 border-t mt-8">
+                {allResult && (
+                    <div className={`p-3 rounded-lg text-sm mb-4 ${allResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {allResult.message}
+                    </div>
+                )}
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={handleSaveAllKeys}
+                        disabled={isAnyActionInProgress}
+                        className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 w-full md:w-auto"
+                    >
+                        {isSavingAll ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-save mr-2"></i>Salva Tutte le API</>}
+                    </button>
+                </div>
             </div>
 
         </div>
