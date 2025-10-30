@@ -159,7 +159,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
 
                     const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                     
-                    const updatedSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
+                    // FIX: Explicitly type `updatedSite` to ensure it matches `WorkSite` and prevent type inference issues.
+                    const updatedSite: WorkSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 // FIX: Explicitly specify the WorkSite type to api.updateData to ensure correct type inference for Promise.all.

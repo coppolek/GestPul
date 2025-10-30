@@ -619,6 +619,63 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         }
         setSchedules(await api.getData('schedules'));
     };
+
+    const handleResetPlan = async () => {
+        if (!window.confirm("Sei sicuro di voler resettare tutta la pianificazione della settimana? Tutti gli incarichi manuali e automatici verranno rimossi e i turni torneranno scoperti.")) {
+            return;
+        }
+    
+        setIsPlanning(true);
+        setError(null);
+    
+        try {
+            const weekDateSet = new Set(weekDates.map(toUTCISOString));
+    
+            // Handle schedules from the database
+            const schedulesToUpdate: Schedule[] = [];
+            for (const schedule of schedules) {
+                const assignmentsToKeep: { [date: string]: Assignment[] } = {};
+                let wasModified = false;
+    
+                for (const date in schedule.assignments) {
+                    if (!weekDateSet.has(date)) {
+                        assignmentsToKeep[date] = schedule.assignments[date];
+                    } else {
+                        wasModified = true;
+                    }
+                }
+    
+                if (wasModified) {
+                    schedulesToUpdate.push({ ...schedule, assignments: assignmentsToKeep });
+                }
+            }
+    
+            // Handle local manual planners
+            const updatedManualPlanners = manualPlanners.map(planner => {
+                const assignmentsToKeep: { [date: string]: Assignment[] } = {};
+                for (const date in planner.assignments) {
+                    if (!weekDateSet.has(date)) {
+                        assignmentsToKeep[date] = planner.assignments[date];
+                    }
+                }
+                return { ...planner, assignments: assignmentsToKeep };
+            });
+    
+            // Execute API calls and state updates
+            if (schedulesToUpdate.length > 0) {
+                await Promise.all(schedulesToUpdate.map(s => api.updateData('schedules', s.id, s)));
+            }
+    
+            const freshSchedules = await api.getData<Schedule[]>('schedules');
+            setSchedules(freshSchedules);
+            setManualPlanners(updatedManualPlanners);
+    
+        } catch (e: any) {
+            setError(e.message || "Errore durante il reset della pianificazione.");
+        } finally {
+            setIsPlanning(false);
+        }
+    };
     
     // --- Render ---
     return (
@@ -654,6 +711,14 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             </div>
                         )}
                     </div>
+                    <button
+                        onClick={handleResetPlan}
+                        disabled={isPlanning}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:bg-gray-400"
+                        title="Azzera la pianificazione della settimana corrente"
+                    >
+                       <i className="fa-solid fa-undo"></i> Reset
+                    </button>
                     <button onClick={() => setManualPlanners(p => [...p, { id: `man-${Date.now()}`, employeeId: null, label: `Planner Manuale ${p.length + 1}`, assignments: {} }])} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                         <i className="fa-solid fa-plus mr-2"></i>Aggiungi Planner
                     </button>
