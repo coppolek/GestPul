@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
@@ -814,7 +813,17 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                 </table>
             </div>
         </div>
-        {isModalOpen && <AssignmentModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveAssignment} assignment={modalContext?.assignment} sites={sites} employees={employees}/>}
+        {isModalOpen && modalContext && (
+            <AssignmentModal 
+                isOpen={isModalOpen} 
+                onClose={handleCloseModal} 
+                onSave={handleSaveAssignment} 
+                assignment={modalContext.assignment} 
+                sites={sites} 
+                employees={employees}
+                date={modalContext.date}
+            />
+        )}
         </>
     );
 };
