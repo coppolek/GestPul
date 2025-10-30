@@ -89,8 +89,13 @@ export const getData = async <T>(collection: CollectionName): Promise<T> => {
 export const addData = async <T, R>(collection: CollectionName, item: T): Promise<R> => {
     await delay(250);
     const db = getDb();
-    const newId = `${collection.slice(0, -1)}-${Date.now()}`;
-    const newItem = { ...item, id: newId };
+    // FIX: Respect pre-existing ID on the item, otherwise generate a new one.
+    // This is required for creating singleton records like the 'EXTRA JOLLY' planner.
+    const hasId = Object.prototype.hasOwnProperty.call(item, 'id') && (item as any).id;
+    const newItem = hasId
+        ? { ...(item as object) }
+        : { ...item, id: `${collection.slice(0, -1)}-${Date.now()}` };
+
     (db[collection] as any[]).push(newItem);
     saveDb(db);
     return newItem as unknown as R;

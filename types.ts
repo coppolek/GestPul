@@ -70,6 +70,7 @@ export interface Assignment {
     endTime: string;
     originalEmployeeName?: string;
     notes?: string;
+    extraOperatorIds?: string[];
 }
   
 export interface Schedule {

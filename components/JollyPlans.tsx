@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, Assignment, AbsenceStatus, ApiKey } from '../types';
 import AssignmentModal from './modals/AssignmentModal';
@@ -43,6 +44,7 @@ const calculateHours = (start: string, end: string): number => {
     return (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
 };
 
+const EXTRA_JOLLY_ID = 'extra-jolly-planner';
 
 interface JollyPlansProps {
     employees: Employee[];
@@ -73,6 +75,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
     const [isPlanDropdownOpen, setIsPlanDropdownOpen] = useState(false);
 
     const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
+    const employeeMap = useMemo(() => new Map(employees.map(e => [e.id, `${e.firstName} ${e.lastName}`])), [employees]);
 
     const handleOpenModal = (scheduleId: string, date: string, assignment?: Assignment) => {
         setModalContext({ scheduleId, date, assignment });
@@ -98,15 +101,22 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
 
     const allPlanners = useMemo(() => {
         const jollyPlanners = jollyEmployees.map(jolly => {
-            const existingSchedule = schedules.find(s => s.employeeId === jolly.id);
-            return existingSchedule || {
+            return schedules.find(s => s.employeeId === jolly.id) || {
                 id: `jolly-${jolly.id}`,
                 employeeId: jolly.id,
                 label: `${jolly.firstName} ${jolly.lastName}`,
                 assignments: {}
             };
         });
-        return [...jollyPlanners, ...manualPlanners];
+
+        const extraJollyPlanner = schedules.find(s => s.id === EXTRA_JOLLY_ID) || {
+            id: EXTRA_JOLLY_ID,
+            employeeId: null,
+            label: 'EXTRA JOLLY',
+            assignments: {}
+        };
+        
+        return [...jollyPlanners, extraJollyPlanner, ...manualPlanners];
     }, [jollyEmployees, schedules, manualPlanners]);
     
     useEffect(() => {
@@ -121,9 +131,10 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
 
 
     const uncoveredShifts = useMemo(() => {
+        const allPlannerSchedules = [...schedules, ...manualPlanners];
         // Create a set of unique IDs for all shifts already covered by a Jolly or manual planner.
         const coveredShifts = new Set<string>();
-        allPlanners.forEach(planner => {
+        allPlannerSchedules.forEach(planner => {
             Object.entries(planner.assignments).forEach(([date, dayAssignments]) => {
                 if (Array.isArray(dayAssignments)) {
                     dayAssignments.forEach(ass => {
@@ -193,11 +204,12 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         });
 
         return shifts;
-    }, [weekDates, leaveRequests, sicknessRecords, employees, sites, allPlanners]);
+    }, [weekDates, leaveRequests, sicknessRecords, employees, sites, schedules, manualPlanners]);
 
     const conflicts = useMemo(() => {
         const conflictSet = new Set<string>();
         allPlanners.forEach(planner => {
+            if (!planner.employeeId) return; // Skip conflict check for non-employee planners
             Object.values(planner.assignments).forEach(dayAssignments => {
                 if (Array.isArray(dayAssignments) && dayAssignments.length > 1) {
                     const sorted = [...dayAssignments].sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -213,62 +225,97 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         return conflictSet;
     }, [allPlanners]);
 
-    const handleSaveAssignment = async (data: { startTime: string; endTime: string; siteId?: string; notes?: string; }) => {
+    const handleSaveAssignment = async (data: { startTime: string; endTime: string; siteId?: string; notes?: string; extraOperatorIds?: string[] }) => {
         if (!modalContext) return;
-        const { scheduleId, date, assignment } = modalContext;
-        const { startTime, endTime, siteId, notes } = data;
-
-        let planner = allPlanners.find(p => p.id === scheduleId);
-        if (!planner) return;
-
-        const newAssignmentsForDate = [...(planner.assignments[date] || [])];
-        if (assignment) {
-            const index = newAssignmentsForDate.findIndex(a => a.id === assignment.id);
-            if (index > -1) newAssignmentsForDate[index] = { ...assignment, startTime, endTime, siteId: siteId || assignment.siteId, notes };
-        } else {
-            if (!siteId) return;
-            newAssignmentsForDate.push({ id: `asg-${Date.now()}`, siteId, startTime, endTime, notes });
-        }
-
-        const updatedPlanner = { ...planner, assignments: { ...planner.assignments, [date]: newAssignmentsForDate } };
-        
-        const isJollyPlanner = jollyEmployees.some(j => j.id === updatedPlanner.employeeId);
-
-        if (isJollyPlanner) {
-            const existingSchedule = schedules.find(s => s.id === updatedPlanner.id);
-            let updatedSchedule;
-            if (existingSchedule) {
-                updatedSchedule = await api.updateData<Schedule>('schedules', updatedPlanner.id, updatedPlanner);
-            } else {
-                updatedSchedule = await api.addData<Omit<Schedule, 'id'>, Schedule>('schedules', {
-                    employeeId: updatedPlanner.employeeId,
-                    label: updatedPlanner.label,
-                    assignments: updatedPlanner.assignments,
-                });
+        const { scheduleId: sourceScheduleId, date, assignment: originalAssignment } = modalContext;
+        const { startTime, endTime, siteId, notes, extraOperatorIds } = data;
+    
+        const hasExtraOperators = extraOperatorIds && extraOperatorIds.length > 0;
+        // If we add extra operators, target is EXTRA_JOLLY. Otherwise, it stays where it was.
+        const targetScheduleId = hasExtraOperators ? EXTRA_JOLLY_ID : sourceScheduleId;
+    
+        const newAssignmentData: Assignment = {
+            ...(originalAssignment || {}),
+            id: originalAssignment?.id || `asg-${Date.now()}`,
+            siteId: siteId || originalAssignment!.siteId,
+            startTime,
+            endTime,
+            notes,
+            extraOperatorIds: extraOperatorIds || [],
+        };
+    
+        try {
+            let allSchedules = await api.getData<Schedule[]>('schedules');
+    
+            let sourceSchedule = allSchedules.find(s => s.id === sourceScheduleId);
+            let targetSchedule = allSchedules.find(s => s.id === targetScheduleId);
+    
+            const promises = [];
+    
+            // 1. Remove from source if it's a move
+            if (originalAssignment && sourceScheduleId !== targetScheduleId && sourceSchedule) {
+                const assignments = sourceSchedule.assignments[date] || [];
+                sourceSchedule.assignments[date] = assignments.filter(a => a.id !== originalAssignment.id);
+                promises.push(api.updateData('schedules', sourceSchedule.id, sourceSchedule));
             }
-            setSchedules(prev => {
-                const otherSchedules = prev.filter(s => s.id !== updatedSchedule.id);
-                return [...otherSchedules, updatedSchedule];
-            });
-        } else {
-            setManualPlanners(prev => prev.map(p => p.id === updatedPlanner.id ? updatedPlanner : p));
+    
+            // 2. Add/Update in target
+            if (!targetSchedule) { // First assignment for EXTRA_JOLLY, create schedule
+                 // FIX: Removed incorrect type annotation `Omit<Schedule, 'id'>` which caused a type error
+                 // because the object literal contains an `id` property.
+                 const newSchedule = {
+                    id: EXTRA_JOLLY_ID,
+                    employeeId: null,
+                    label: 'EXTRA JOLLY',
+                    assignments: { [date]: [newAssignmentData] }
+                };
+                promises.push(api.addData('schedules', newSchedule));
+            } else {
+                const targetAssignments = [...(targetSchedule.assignments[date] || [])];
+                const existingIndex = targetAssignments.findIndex(a => a.id === newAssignmentData.id);
+    
+                if (existingIndex > -1) { // Update existing
+                    targetAssignments[existingIndex] = newAssignmentData;
+                } else { // Add new
+                    targetAssignments.push(newAssignmentData);
+                }
+                targetSchedule.assignments[date] = targetAssignments;
+                 promises.push(api.updateData('schedules', targetSchedule.id, targetSchedule));
+            }
+            
+            await Promise.all(promises);
+    
+            // Refresh state from DB to ensure consistency
+            const freshSchedules = await api.getData<Schedule[]>('schedules');
+            setSchedules(freshSchedules);
+    
+        } catch (error) {
+            console.error("Failed to save assignment:", error);
+            setError("Errore durante il salvataggio. Riprova.");
+        } finally {
+            handleCloseModal();
         }
-        handleCloseModal();
     };
 
 
     const handleDeleteAssignment = async (plannerId: string, date: string, assignmentId: string) => {
-        const planner = allPlanners.find(p => p.id === plannerId);
-        if (!planner) return;
-        const updatedAssignments = (planner.assignments[date] || []).filter(a => a.id !== assignmentId);
-        const updatedPlanner = { ...planner, assignments: { ...planner.assignments, [date]: updatedAssignments } };
+        const isManual = manualPlanners.some(p => p.id === plannerId);
 
-        const isJollyPlanner = jollyEmployees.some(j => j.id === updatedPlanner.employeeId);
-        if (isJollyPlanner) {
-             const updated = await api.updateData<Schedule>('schedules', planner.id, updatedPlanner);
-             setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
+        if (isManual) {
+             setManualPlanners(prev => prev.map(p => {
+                if (p.id === plannerId) {
+                    const updatedAssignments = (p.assignments[date] || []).filter(a => a.id !== assignmentId);
+                    return { ...p, assignments: { ...p.assignments, [date]: updatedAssignments } };
+                }
+                return p;
+            }));
         } else {
-            setManualPlanners(prev => prev.map(p => p.id === updatedPlanner.id ? updatedPlanner : p));
+            const planner = schedules.find(p => p.id === plannerId);
+            if (!planner) return;
+            const updatedAssignments = (planner.assignments[date] || []).filter(a => a.id !== assignmentId);
+            const updatedPlanner = { ...planner, assignments: { ...planner.assignments, [date]: updatedAssignments } };
+            const updated = await api.updateData<Schedule>('schedules', planner.id, updatedPlanner);
+            setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
         }
     };
     
@@ -296,6 +343,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             endTime: hours[1],
             originalEmployeeName: type === 'absence' ? data.employeeName : data.originalEmployeeName,
             notes: type === 'assignment' ? data.notes : undefined,
+            extraOperatorIds: type === 'assignment' ? data.extraOperatorIds : undefined,
         };
     
         // --- Create the next state optimistically ---
@@ -326,8 +374,8 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         const nextAllPlanners = getNextPlanners(allCurrentPlanners);
     
         const jollyIds = new Set(jollyEmployees.map(e => e.id));
-        const nextSchedules = nextAllPlanners.filter(p => p.employeeId && jollyIds.has(p.employeeId));
-        const nextManualPlanners = nextAllPlanners.filter(p => !p.employeeId);
+        const nextSchedules = nextAllPlanners.filter(p => (p.employeeId && jollyIds.has(p.employeeId)) || p.id === EXTRA_JOLLY_ID);
+        const nextManualPlanners = nextAllPlanners.filter(p => !p.employeeId && p.id !== EXTRA_JOLLY_ID);
     
         // Optimistically update the UI
         setSchedules(nextSchedules);
@@ -669,9 +717,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
 
                             return (
                                 <tr key={planner.id}>
-                                    <td className="p-2 border font-medium text-gray-800 sticky left-0 bg-white z-10 w-48">
+                                    <td className={`p-2 border font-medium sticky left-0 z-10 w-48 ${planner.id === EXTRA_JOLLY_ID ? 'bg-indigo-100 text-indigo-800' : 'bg-white text-gray-800'}`}>
                                         {planner.label}
-                                        {!planner.employeeId && <button onClick={() => setManualPlanners(p => p.filter(mp => mp.id !== planner.id))} className="ml-2 text-red-500 text-xs"><i className="fa fa-trash"></i></button>}
+                                        {!planner.employeeId && planner.id !== EXTRA_JOLLY_ID && <button onClick={() => setManualPlanners(p => p.filter(mp => mp.id !== planner.id))} className="ml-2 text-red-500 text-xs"><i className="fa fa-trash"></i></button>}
                                     </td>
                                     {weekDates.map(date => {
                                         const dateStr = toUTCISOString(date);
@@ -685,8 +733,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                         .map(ass => {
                                                         const isConflict = conflicts.has(ass.id);
                                                         const duration = calculateHours(ass.startTime, ass.endTime);
+                                                        const isExtra = planner.id === EXTRA_JOLLY_ID;
                                                         return(
-                                                        <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200 text-red-900' : 'bg-blue-100 text-blue-900'}`}>
+                                                        <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200 text-red-900' : isExtra ? 'bg-indigo-200 text-indigo-900' : 'bg-blue-100 text-blue-900'}`}>
                                                             {isConflict && <i className="fa-solid fa-triangle-exclamation text-red-600 absolute -top-1 -left-1"></i>}
                                                             <p className="font-semibold">{siteMap.get(ass.siteId)}</p>
                                                             {ass.notes && (
@@ -695,8 +744,14 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                                 </p>
                                                             )}
                                                             {ass.originalEmployeeName && (
-                                                                <p className={`italic ${isConflict ? 'text-red-800' : 'text-blue-800'}`}>
+                                                                <p className={`italic ${isConflict ? 'text-red-800' : isExtra ? 'text-indigo-800' : 'text-blue-800'}`}>
                                                                     Assente: {ass.originalEmployeeName}
+                                                                </p>
+                                                            )}
+                                                            {ass.extraOperatorIds && ass.extraOperatorIds.length > 0 && (
+                                                                <p className="text-xs mt-1 pt-1 border-t border-indigo-300">
+                                                                    <i className="fa-solid fa-users mr-1"></i>
+                                                                    {ass.extraOperatorIds.map(id => employeeMap.get(id)).join(', ')}
                                                                 </p>
                                                             )}
                                                             <div className="flex justify-between items-center">
@@ -728,7 +783,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                 Riepilogo Totali per Operatore
                             </td>
                         </tr>
-                        {allPlanners.map(planner => {
+                        {allPlanners.filter(p => p.employeeId).map(planner => {
                             const weeklyTotal = weekDates.reduce((total, date) => {
                                 const dateStr = toUTCISOString(date);
                                 const dayAssignments = planner.assignments[dateStr] || [];
@@ -759,7 +814,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                 </table>
             </div>
         </div>
-        {isModalOpen && <AssignmentModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveAssignment} assignment={modalContext?.assignment} sites={sites}/>}
+        {isModalOpen && <AssignmentModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveAssignment} assignment={modalContext?.assignment} sites={sites} employees={employees}/>}
         </>
     );
 };
