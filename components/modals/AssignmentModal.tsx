@@ -16,6 +16,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, onSa
     const [siteId, setSiteId] = useState('');
     const [notes, setNotes] = useState('');
     const [extraOperatorIds, setExtraOperatorIds] = useState<string[]>([]);
+    const [extraOperatorSearch, setExtraOperatorSearch] = useState('');
 
     const operatorEmployees = useMemo(() => employees.filter(e => e.role === 'Operatore'), [employees]);
 
@@ -34,7 +35,8 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, onSa
             setNotes('');
             setExtraOperatorIds([]);
         }
-    }, [assignment]);
+        setExtraOperatorSearch(''); // Reset search on open
+    }, [assignment, isOpen]);
 
     const handleExtraOpToggle = (id: string) => {
         setExtraOperatorIds(prev =>
@@ -50,6 +52,16 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, onSa
         }
         onSave({ startTime, endTime, siteId, notes, extraOperatorIds });
     };
+
+    const filteredExtraOperators = useMemo(() => {
+        if (!extraOperatorSearch) {
+            return operatorEmployees;
+        }
+        const searchTerm = extraOperatorSearch.toLowerCase();
+        return operatorEmployees.filter(op => 
+            `${op.firstName} ${op.lastName}`.toLowerCase().includes(searchTerm)
+        );
+    }, [operatorEmployees, extraOperatorSearch]);
 
     if (!isOpen) return null;
 
@@ -112,8 +124,15 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, onSa
 
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Operatori Extra (da altri cantieri)</label>
+                        <input 
+                            type="text"
+                            placeholder="Cerca operatore..."
+                            value={extraOperatorSearch}
+                            onChange={(e) => setExtraOperatorSearch(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-lg mb-2"
+                        />
                         <div className="max-h-32 overflow-y-auto border rounded-lg p-2 space-y-1 bg-gray-50">
-                            {operatorEmployees.length > 0 ? operatorEmployees.map(op => (
+                            {filteredExtraOperators.length > 0 ? filteredExtraOperators.map(op => (
                                 <label key={op.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-blue-100">
                                     <input 
                                         type="checkbox"
@@ -123,7 +142,7 @@ const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, onSa
                                     />
                                     <span>{op.firstName} {op.lastName}</span>
                                 </label>
-                            )) : <p className="text-xs text-gray-500 italic p-1">Nessun operatore disponibile.</p>}
+                            )) : <p className="text-xs text-gray-500 italic p-1">Nessun operatore trovato.</p>}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Selezionando operatori qui, l'incarico verrà spostato nel planner "EXTRA JOLLY".</p>
                     </div>
