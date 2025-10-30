@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { ApiKey } from '../types';
@@ -34,6 +33,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [isSavingOrs, setIsSavingOrs] = useState(false);
     const [testOrsResult, setTestOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [saveOrsResult, setSaveOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    const [activeDistanceService, setActiveDistanceService] = useState<'ors' | 'maps'>('ors');
 
 
     useEffect(() => {
@@ -225,103 +226,124 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                 </div>
             </div>
 
-            {/* Maps Section */}
+            {/* Distance Calculation Section */}
             <div className="p-4 border rounded-lg space-y-4">
-                <h3 className="text-lg font-semibold text-gray-700">{mapsApiKeyObject?.name}</h3>
-                <p className="text-xs text-gray-500 -mt-3">Alternativa a OpenRouteService per il calcolo distanze.</p>
-                <div>
-                    <div className="relative">
-                        <input
-                            id="maps-key"
-                            type={isMapsKeyVisible ? 'text' : 'password'}
-                            value={mapsKey}
-                            onChange={(e) => setMapsKey(e.target.value)}
-                            placeholder="Incolla qui la tua chiave API"
-                            className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setIsMapsKeyVisible(!isMapsKeyVisible)}
-                            className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
-                             aria-label="Mostra/Nascondi chiave"
-                        >
-                            <i className={`fa-solid ${isMapsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                    </div>
-                </div>
-
-                {saveMapsResult && (
-                    <div className={`p-3 rounded-lg text-sm ${saveMapsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {saveMapsResult.message}
-                    </div>
-                )}
-
-                <div className="flex justify-end items-center gap-4 pt-4 border-t">
-                    <button
-                        type="button"
-                        onClick={handleSaveMapsKey}
-                        disabled={isAnyActionInProgress}
-                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
-                    >
-                        {isSavingMaps ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
-                    </button>
-                </div>
-            </div>
-
-            {/* OpenRouteService Section */}
-            <div className="p-4 border rounded-lg space-y-4">
-                <h3 className="text-lg font-semibold text-gray-700">{orsApiKeyObject?.name}</h3>
-                <p className="text-xs text-gray-500 -mt-3">Consigliato per calcolare le distanze nella funzionalità "Trova Operatori".</p>
-                <div>
-                    <div className="relative">
-                        <input
-                            id="ors-key"
-                            type={isOrsKeyVisible ? 'text' : 'password'}
-                            value={orsKey}
-                            onChange={(e) => setOrsKey(e.target.value)}
-                            placeholder="Incolla qui la tua chiave API"
-                            className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setIsOrsKeyVisible(!isOrsKeyVisible)}
-                            className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
-                             aria-label="Mostra/Nascondi chiave"
-                        >
-                            <i className={`fa-solid ${isOrsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                    </div>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-700">Servizio di Calcolo Distanze</h3>
+                <p className="text-sm text-gray-500 -mt-3">Scegli e configura il servizio per la funzionalità "Trova Operatori".</p>
                 
-                {saveOrsResult && (
-                    <div className={`p-3 rounded-lg text-sm ${saveOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {saveOrsResult.message}
-                    </div>
-                )}
-                {testOrsResult && (
-                    <div className={`p-3 rounded-lg text-sm ${testOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {testOrsResult.message}
-                    </div>
-                )}
-
-                <div className="flex justify-end items-center gap-4 pt-4 border-t">
-                    <button
-                        type="button"
-                        onClick={handleTestOrsConnection}
-                        disabled={isAnyActionInProgress}
-                        className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
+                <div className="flex border-b">
+                    <button 
+                        onClick={() => { setActiveDistanceService('ors'); clearResults(); }}
+                        className={`px-4 py-2 text-sm font-medium transition-colors ${activeDistanceService === 'ors' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'}`}
                     >
-                        {isTestingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
+                        OpenRouteService (Consigliato)
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleSaveOrsKey}
-                        disabled={isAnyActionInProgress}
-                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
+                    <button 
+                        onClick={() => { setActiveDistanceService('maps'); clearResults(); }}
+                        className={`px-4 py-2 text-sm font-medium transition-colors ${activeDistanceService === 'maps' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'}`}
                     >
-                        {isSavingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                        Google Maps
                     </button>
                 </div>
+
+                {activeDistanceService === 'ors' && (
+                    <div className="pt-2 space-y-4">
+                         <div>
+                            <div className="relative">
+                                <input
+                                    id="ors-key"
+                                    type={isOrsKeyVisible ? 'text' : 'password'}
+                                    value={orsKey}
+                                    onChange={(e) => setOrsKey(e.target.value)}
+                                    placeholder="Incolla qui la tua chiave API"
+                                    className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOrsKeyVisible(!isOrsKeyVisible)}
+                                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                                    aria-label="Mostra/Nascondi chiave"
+                                >
+                                    <i className={`fa-solid ${isOrsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {saveOrsResult && (
+                            <div className={`p-3 rounded-lg text-sm ${saveOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {saveOrsResult.message}
+                            </div>
+                        )}
+                        {testOrsResult && (
+                            <div className={`p-3 rounded-lg text-sm ${testOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {testOrsResult.message}
+                            </div>
+                        )}
+
+                        <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                            <button
+                                type="button"
+                                onClick={handleTestOrsConnection}
+                                disabled={isAnyActionInProgress}
+                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
+                            >
+                                {isTestingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveOrsKey}
+                                disabled={isAnyActionInProgress}
+                                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
+                            >
+                                {isSavingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                
+                {activeDistanceService === 'maps' && (
+                    <div className="pt-2 space-y-4">
+                       <div>
+                            <div className="relative">
+                                <input
+                                    id="maps-key"
+                                    type={isMapsKeyVisible ? 'text' : 'password'}
+                                    value={mapsKey}
+                                    onChange={(e) => setMapsKey(e.target.value)}
+                                    placeholder="Incolla qui la tua chiave API"
+                                    className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapsKeyVisible(!isMapsKeyVisible)}
+                                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                                    aria-label="Mostra/Nascondi chiave"
+                                >
+                                    <i className={`fa-solid ${isMapsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {saveMapsResult && (
+                            <div className={`p-3 rounded-lg text-sm ${saveMapsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {saveMapsResult.message}
+                            </div>
+                        )}
+                        
+                        <p className="text-xs text-gray-500 text-center">La verifica per la chiave Google Maps non è al momento disponibile.</p>
+
+                        <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                            <button
+                                type="button"
+                                onClick={handleSaveMapsKey}
+                                disabled={isAnyActionInProgress}
+                                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
+                            >
+                                {isSavingMaps ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
         </div>

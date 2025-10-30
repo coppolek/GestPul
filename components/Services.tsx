@@ -162,8 +162,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     const updatedSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
                     sitesToUpdatePayload.push(updatedSite);
                 }
+                // FIX: Explicitly specify the WorkSite type to api.updateData to ensure correct type inference for Promise.all.
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Explicitly provide the WorkSite type to api.updateData so Promise.all can infer the correct return type.
                 const updatedSitesFromApi = await Promise.all(updatePromises);
                 
                 setSites(prev => {
