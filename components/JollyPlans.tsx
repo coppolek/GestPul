@@ -185,10 +185,10 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         return conflictSet;
     }, [allPlanners]);
 
-    const handleSaveAssignment = async (data: { startTime: string; endTime: string; siteId?: string }) => {
+    const handleSaveAssignment = async (data: { startTime: string; endTime: string; siteId?: string; notes?: string; }) => {
         if (!modalContext) return;
         const { scheduleId, date, assignment } = modalContext;
-        const { startTime, endTime, siteId } = data;
+        const { startTime, endTime, siteId, notes } = data;
 
         let planner = allPlanners.find(p => p.id === scheduleId);
         if (!planner) return;
@@ -196,10 +196,10 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
         const newAssignmentsForDate = [...(planner.assignments[date] || [])];
         if (assignment) {
             const index = newAssignmentsForDate.findIndex(a => a.id === assignment.id);
-            if (index > -1) newAssignmentsForDate[index] = { ...assignment, startTime, endTime, siteId: siteId || assignment.siteId };
+            if (index > -1) newAssignmentsForDate[index] = { ...assignment, startTime, endTime, siteId: siteId || assignment.siteId, notes };
         } else {
             if (!siteId) return;
-            newAssignmentsForDate.push({ id: `asg-${Date.now()}`, siteId, startTime, endTime });
+            newAssignmentsForDate.push({ id: `asg-${Date.now()}`, siteId, startTime, endTime, notes });
         }
 
         const updatedPlanner = { ...planner, assignments: { ...planner.assignments, [date]: newAssignmentsForDate } };
@@ -267,6 +267,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             startTime: hours[0],
             endTime: hours[1],
             originalEmployeeName: type === 'absence' ? data.employeeName : data.originalEmployeeName,
+            notes: type === 'assignment' ? data.notes : undefined,
         };
     
         // --- Create the next state optimistically ---
@@ -634,6 +635,11 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                                         <div key={ass.id} draggable onDragStart={() => handleDragStart('assignment', ass, { plannerId: planner.id, date: dateStr })} className={`p-1.5 rounded-lg text-xs cursor-grab group/item relative ${isConflict ? 'bg-red-200 text-red-900' : 'bg-blue-100 text-blue-900'}`}>
                                                             {isConflict && <i className="fa-solid fa-triangle-exclamation text-red-600 absolute -top-1 -left-1"></i>}
                                                             <p className="font-semibold">{siteMap.get(ass.siteId)}</p>
+                                                            {ass.notes && (
+                                                                <p className="italic text-xs truncate" title={ass.notes}>
+                                                                    <i className="fa-solid fa-note-sticky mr-1 opacity-70"></i>{ass.notes}
+                                                                </p>
+                                                            )}
                                                             {ass.originalEmployeeName && (
                                                                 <p className={`italic ${isConflict ? 'text-red-800' : 'text-blue-800'}`}>
                                                                     Assente: {ass.originalEmployeeName}
