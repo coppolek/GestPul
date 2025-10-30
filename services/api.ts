@@ -53,7 +53,7 @@ const initialData: DataShape = {
   apiKeys: [
       { id: 'google_gemini', name: 'Google Gemini API Key', key: '' },
       { id: 'google_maps', name: 'Google Maps API Key', key: '' },
-      { id: 'open_route_service', name: 'OpenRouteService API Key', key: '' },
+      { id: 'open_route_service', name: 'OpenRouteService API Key', key: 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUzYmVjNGExMmI0NjRlMWU5OTQyNGE4YWRhZGIxOGUyIiwiaCI6Im11cm11cjY0In0=' },
   ],
   messages: []
 };
