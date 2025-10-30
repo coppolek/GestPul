@@ -121,12 +121,29 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
 
 
     const uncoveredShifts = useMemo(() => {
+        // Create a set of unique IDs for all shifts already covered by a Jolly or manual planner.
+        const coveredShifts = new Set<string>();
+        allPlanners.forEach(planner => {
+            Object.entries(planner.assignments).forEach(([date, dayAssignments]) => {
+                if (Array.isArray(dayAssignments)) {
+                    dayAssignments.forEach(ass => {
+                        // A shift is considered "covered" if it has an original employee name,
+                        // meaning it originated from an absence.
+                        if (ass.originalEmployeeName) {
+                            const uniqueId = `${date}-${ass.siteId}-${ass.startTime}-${ass.endTime}-${ass.originalEmployeeName}`;
+                            coveredShifts.add(uniqueId);
+                        }
+                    });
+                }
+            });
+        });
+
         const shifts: { date: string; siteId: string; siteName: string; employeeName: string; workingHours: string; weeklyHours: number; }[] = [];
         const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
         [...leaveRequests, ...sicknessRecords].forEach(absence => {
              const employee = employees.find(e => e.id === absence.employeeId);
-             if (employee?.role !== 'Operatore') return;
+             if (!employee || employee.role !== 'Operatore') return;
 
              for (const date of weekDates) {
                 const dateStr = toUTCISOString(date);
@@ -140,32 +157,43 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                          .filter(a => a.employeeId === absence.employeeId && a.workingDays.includes(dayOfWeek))
                          .map(a => {
                             const hours = a.workingHours.split(/\s*-\s*/);
-                            const start = hours[0];
-                            const end = hours[1];
+                            const start = hours[0] || '';
+                            const end = hours[1] || '';
                             const dailyHours = calculateHours(start, end);
                             const weeklyHours = dailyHours * a.workingDays.length;
                              return { 
                                 siteId: s.id, 
                                 siteName: s.name, 
                                 workingHours: a.workingHours,
+                                startTime: start,
+                                endTime: end,
                                 weeklyHours: weeklyHours
                             }
                          })
                     );
                     
                     operatorAssignments.forEach(opAss => {
-                        shifts.push({
-                            date: dateStr,
-                            ...opAss,
-                            employeeName: `${employee.firstName} ${employee.lastName}`
-                        });
+                        const employeeName = `${employee.firstName} ${employee.lastName}`;
+                        const uniqueId = `${dateStr}-${opAss.siteId}-${opAss.startTime}-${opAss.endTime}-${employeeName}`;
+                        
+                        // Only add the shift if it's not already covered by a planner.
+                        if (!coveredShifts.has(uniqueId)) {
+                             shifts.push({
+                                date: dateStr,
+                                siteId: opAss.siteId,
+                                siteName: opAss.siteName,
+                                workingHours: opAss.workingHours,
+                                weeklyHours: opAss.weeklyHours,
+                                employeeName: employeeName
+                            });
+                        }
                     });
                 }
              }
         });
 
         return shifts;
-    }, [weekDates, leaveRequests, sicknessRecords, employees, sites]);
+    }, [weekDates, leaveRequests, sicknessRecords, employees, sites, allPlanners]);
 
     const conflicts = useMemo(() => {
         const conflictSet = new Set<string>();
@@ -466,8 +494,32 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             let bestScore = -1;
     
             for (const jolly of jollyEmployees) {
-                // Simplified scoring: lower workload is better. A real implementation would use Distance Matrix API.
-                const score = 1 / (jollyWorkload[jolly.id] + 1);
+                // Rule 1: Check for temporal conflicts before assigning.
+                const shiftHours = shift.workingHours.split(/\s*-\s*/);
+                const shiftStart = shiftHours[0];
+                const shiftEnd = shiftHours[1];
+
+                // Check against existing schedule
+                const schedule = schedules.find(s => s.employeeId === jolly.id);
+                const existingAssignmentsOnDate = schedule?.assignments[shift.date] || [];
+
+                // Check against newly planned assignments from this run
+                const newAssignmentsOnDate = (newAssignmentsByEmployee[jolly.id] || [])
+                    .filter(a => a.date === shift.date)
+                    .map(a => a.assignment);
+
+                const allAssignmentsOnDate = [...existingAssignmentsOnDate, ...newAssignmentsOnDate];
+
+                const hasConflict = allAssignmentsOnDate.some(ass => {
+                    // Overlap logic: (StartA < EndB) and (EndA > StartB)
+                    return shiftStart < ass.endTime && shiftEnd > ass.startTime;
+                });
+
+                if (hasConflict) {
+                    continue; // Skip this jolly, they are busy at this time.
+                }
+    
+                const score = 1 / (jollyWorkload[jolly.id] + 1); // Lower workload is better
     
                 if (score > bestScore) {
                     bestScore = score;
@@ -628,7 +680,9 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                                         return (
                                             <td key={date.toISOString()} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(planner.id, dateStr)} className="p-1 border align-top h-24 relative group">
                                                 <div className="space-y-1.5 h-full">
-                                                    {Array.isArray(dayAssignments) && dayAssignments.map(ass => {
+                                                    {Array.isArray(dayAssignments) && [...dayAssignments]
+                                                        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                                                        .map(ass => {
                                                         const isConflict = conflicts.has(ass.id);
                                                         const duration = calculateHours(ass.startTime, ass.endTime);
                                                         return(
