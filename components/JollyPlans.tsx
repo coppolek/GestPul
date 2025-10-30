@@ -262,7 +262,7 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
             if (!targetSchedule) { // First assignment for EXTRA_JOLLY, create schedule
                  // FIX: Removed incorrect type annotation `Omit<Schedule, 'id'>` which caused a type error
                  // because the object literal contains an `id` property.
-                 const newSchedule = {
+                 const newSchedule: Schedule = {
                     id: EXTRA_JOLLY_ID,
                     employeeId: null,
                     label: 'EXTRA JOLLY',

@@ -15,8 +15,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [isGeminiKeyVisible, setIsGeminiKeyVisible] = useState(false);
     const [isTestingGemini, setIsTestingGemini] = useState(false);
     const [isSavingGemini, setIsSavingGemini] = useState(false);
-    const [testGeminiResult, setTestGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [saveGeminiResult, setSaveGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [geminiResult, setGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     
     // Maps State
     const mapsApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'google_maps'), [apiKeys]);
@@ -31,8 +30,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [isOrsKeyVisible, setIsOrsKeyVisible] = useState(false);
     const [isTestingOrs, setIsTestingOrs] = useState(false);
     const [isSavingOrs, setIsSavingOrs] = useState(false);
-    const [testOrsResult, setTestOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [saveOrsResult, setSaveOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [orsResult, setOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [activeDistanceService, setActiveDistanceService] = useState<'ors' | 'maps'>('ors');
 
@@ -45,11 +43,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
 
 
     const clearResults = () => {
-        setTestGeminiResult(null);
-        setSaveGeminiResult(null);
+        setGeminiResult(null);
         setSaveMapsResult(null);
-        setTestOrsResult(null);
-        setSaveOrsResult(null);
+        setOrsResult(null);
     }
 
     const handleTestGeminiConnection = async () => {
@@ -57,7 +53,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
         clearResults();
 
         if (!geminiKey.trim()) {
-            setTestGeminiResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
+            setGeminiResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
             setIsTestingGemini(false);
             return;
         }
@@ -69,14 +65,14 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                 contents: 'Ciao',
             });
             if (response.text !== undefined) {
-                 setTestGeminiResult({ type: 'success', message: 'Connessione riuscita! La chiave API Gemini è valida.' });
+                 setGeminiResult({ type: 'success', message: 'Connessione riuscita! La chiave API Gemini è valida.' });
             } else {
                 throw new Error("La risposta dell'API non era nel formato previsto.");
             }
         } catch (error) {
             console.error("API connection test failed:", error);
             const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
-            setTestGeminiResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
+            setGeminiResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
         } finally {
             setIsTestingGemini(false);
         }
@@ -87,7 +83,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
         clearResults();
 
         if (!orsKey.trim()) {
-            setTestOrsResult({ type: 'error', message: 'Inserisci una chiave API OpenRouteService per eseguire il test.' });
+            setOrsResult({ type: 'error', message: 'Inserisci una chiave API OpenRouteService per eseguire il test.' });
             setIsTestingOrs(false);
             return;
         }
@@ -98,11 +94,11 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                 const errorData = await response.json();
                 throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
             }
-            setTestOrsResult({ type: 'success', message: 'Connessione riuscita! La chiave OpenRouteService è valida.' });
+            setOrsResult({ type: 'success', message: 'Connessione riuscita! La chiave OpenRouteService è valida.' });
         } catch (error) {
             console.error("ORS connection test failed:", error);
             const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
-            setTestOrsResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
+            setOrsResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
         } finally {
             setIsTestingOrs(false);
         }
@@ -117,10 +113,10 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
             const updatedKey = { ...geminiApiKeyObject, key: geminiKey };
             const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
             setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
-            setSaveGeminiResult({ type: 'success', message: 'Chiave API Gemini salvata con successo!' });
+            setGeminiResult({ type: 'success', message: 'Chiave API Gemini salvata con successo!' });
         } catch (error) {
             console.error("Failed to save API key:", error);
-            setSaveGeminiResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+            setGeminiResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
         } finally {
             setIsSavingGemini(false);
         }
@@ -153,10 +149,10 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
             const updatedKey = { ...orsApiKeyObject, key: orsKey };
             const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
             setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
-            setSaveOrsResult({ type: 'success', message: 'Chiave API OpenRouteService salvata con successo!' });
+            setOrsResult({ type: 'success', message: 'Chiave API OpenRouteService salvata con successo!' });
         } catch (error) {
             console.error("Failed to save API key:", error);
-            setSaveOrsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+            setOrsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
         } finally {
             setIsSavingOrs(false);
         }
@@ -195,14 +191,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                     </div>
                 </div>
 
-                {saveGeminiResult && (
-                    <div className={`p-3 rounded-lg text-sm ${saveGeminiResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {saveGeminiResult.message}
-                    </div>
-                )}
-                {testGeminiResult && (
-                    <div className={`p-3 rounded-lg text-sm ${testGeminiResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {testGeminiResult.message}
+                {geminiResult && (
+                    <div className={`p-3 rounded-lg text-sm ${geminiResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {geminiResult.message}
                     </div>
                 )}
 
@@ -269,14 +260,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                             </div>
                         </div>
                         
-                        {saveOrsResult && (
-                            <div className={`p-3 rounded-lg text-sm ${saveOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {saveOrsResult.message}
-                            </div>
-                        )}
-                        {testOrsResult && (
-                            <div className={`p-3 rounded-lg text-sm ${testOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {testOrsResult.message}
+                        {orsResult && (
+                            <div className={`p-3 rounded-lg text-sm ${orsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {orsResult.message}
                             </div>
                         )}
 
