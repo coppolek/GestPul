@@ -55,7 +55,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
 
     const handleTestGeminiConnection = async () => {
         setIsTestingGemini(true);
-        clearResults();
+        setGeminiResult(null);
+        setAllResult(null);
 
         if (!geminiKey.trim()) {
             setGeminiResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
@@ -85,7 +86,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     
     const handleTestOrsConnection = async () => {
         setIsTestingOrs(true);
-        clearResults();
+        setOrsResult(null);
+        setAllResult(null);
 
         if (!orsKey.trim()) {
             setOrsResult({ type: 'error', message: 'Inserisci una chiave API OpenRouteService per eseguire il test.' });
@@ -112,7 +114,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const handleSaveGeminiKey = async () => {
         if (!geminiApiKeyObject) return;
         setIsSavingGemini(true);
-        clearResults();
+        setGeminiResult(null);
+        setAllResult(null);
 
         try {
             const updatedKey = { ...geminiApiKeyObject, key: geminiKey };
@@ -130,7 +133,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const handleSaveMapsKey = async () => {
         if (!mapsApiKeyObject) return;
         setIsSavingMaps(true);
-        clearResults();
+        setMapsResult(null);
+        setAllResult(null);
 
         try {
             const updatedKey = { ...mapsApiKeyObject, key: mapsKey };
@@ -148,7 +152,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const handleSaveOrsKey = async () => {
         if (!orsApiKeyObject) return;
         setIsSavingOrs(true);
-        clearResults();
+        setOrsResult(null);
+        setAllResult(null);
 
         try {
             const updatedKey = { ...orsApiKeyObject, key: orsKey };

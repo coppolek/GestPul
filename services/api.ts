@@ -1,6 +1,3 @@
-// A simple in-memory database that simulates a backend API.
-// It uses localStorage for persistence.
-
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message } from '../types';
 
 type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages';
@@ -58,26 +55,47 @@ const initialData: DataShape = {
   messages: []
 };
 
-const getDb = (): DataShape => {
-    try {
-        const dbString = localStorage.getItem(DB_KEY);
-        if (dbString) {
-            return JSON.parse(dbString);
-        }
-    } catch (e) {
-        console.error("Failed to parse DB from localStorage", e);
-    }
-    // If nothing in localStorage or parsing fails, initialize with default data
-    localStorage.setItem(DB_KEY, JSON.stringify(initialData));
-    return initialData;
-};
-
 const saveDb = (db: DataShape) => {
     try {
         localStorage.setItem(DB_KEY, JSON.stringify(db));
     } catch (e) {
         console.error("Failed to save DB to localStorage", e);
     }
+};
+
+const getDb = (): DataShape => {
+    let db: DataShape | null = null;
+    try {
+        const dbString = localStorage.getItem(DB_KEY);
+        if (dbString) {
+            db = JSON.parse(dbString);
+        }
+    } catch (e) {
+        console.error("Failed to parse DB from localStorage", e);
+    }
+    
+    // If DB exists, check for missing keys and add them (simple migration)
+    if (db) {
+        let dbWasModified = false;
+        const initialApiKeyMap = new Map(initialData.apiKeys.map(k => [k.id, k]));
+        const existingApiKeyIds = new Set(db.apiKeys.map(k => k.id));
+
+        for (const [id, keyObject] of initialApiKeyMap.entries()) {
+            if (!existingApiKeyIds.has(id)) {
+                db.apiKeys.push(keyObject);
+                dbWasModified = true;
+            }
+        }
+        
+        if (dbWasModified) {
+            saveDb(db);
+        }
+        return db;
+    }
+
+    // If nothing in localStorage or parsing fails, initialize with default data
+    saveDb(initialData);
+    return initialData;
 };
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
