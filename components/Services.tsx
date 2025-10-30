@@ -126,8 +126,9 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             const skipped: string[] = [];
 
             for (const service of services) {
-                const site = siteNameMap.get(normalize(service.siteName));
-                const employee = employeeNameMap.get(normalize(service.employeeName));
+                // FIX: Explicitly type variables to prevent 'unknown' type inference issues.
+                const site: WorkSite | undefined = siteNameMap.get(normalize(service.siteName));
+                const employee: Employee | undefined = employeeNameMap.get(normalize(service.employeeName));
 
                 if (site && employee) {
                     if (!assignmentsBySite.has(site.id)) {

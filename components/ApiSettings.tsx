@@ -14,9 +14,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const geminiApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'google_gemini'), [apiKeys]);
     const [geminiKey, setGeminiKey] = useState('');
     const [isGeminiKeyVisible, setIsGeminiKeyVisible] = useState(false);
-    const [isTesting, setIsTesting] = useState(false);
+    const [isTestingGemini, setIsTestingGemini] = useState(false);
     const [isSavingGemini, setIsSavingGemini] = useState(false);
-    const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [testGeminiResult, setTestGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [saveGeminiResult, setSaveGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     
     // Maps State
@@ -30,7 +30,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const orsApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'open_route_service'), [apiKeys]);
     const [orsKey, setOrsKey] = useState('');
     const [isOrsKeyVisible, setIsOrsKeyVisible] = useState(false);
+    const [isTestingOrs, setIsTestingOrs] = useState(false);
     const [isSavingOrs, setIsSavingOrs] = useState(false);
+    const [testOrsResult, setTestOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [saveOrsResult, setSaveOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
 
@@ -42,19 +44,20 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
 
 
     const clearResults = () => {
-        setTestResult(null);
+        setTestGeminiResult(null);
         setSaveGeminiResult(null);
         setSaveMapsResult(null);
+        setTestOrsResult(null);
         setSaveOrsResult(null);
     }
 
-    const handleTestConnection = async () => {
-        setIsTesting(true);
+    const handleTestGeminiConnection = async () => {
+        setIsTestingGemini(true);
         clearResults();
 
         if (!geminiKey.trim()) {
-            setTestResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
-            setIsTesting(false);
+            setTestGeminiResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
+            setIsTestingGemini(false);
             return;
         }
 
@@ -65,16 +68,42 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                 contents: 'Ciao',
             });
             if (response.text !== undefined) {
-                 setTestResult({ type: 'success', message: 'Connessione riuscita! La chiave API Gemini è valida.' });
+                 setTestGeminiResult({ type: 'success', message: 'Connessione riuscita! La chiave API Gemini è valida.' });
             } else {
                 throw new Error("La risposta dell'API non era nel formato previsto.");
             }
         } catch (error) {
             console.error("API connection test failed:", error);
             const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
-            setTestResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
+            setTestGeminiResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
         } finally {
-            setIsTesting(false);
+            setIsTestingGemini(false);
+        }
+    };
+    
+    const handleTestOrsConnection = async () => {
+        setIsTestingOrs(true);
+        clearResults();
+
+        if (!orsKey.trim()) {
+            setTestOrsResult({ type: 'error', message: 'Inserisci una chiave API OpenRouteService per eseguire il test.' });
+            setIsTestingOrs(false);
+            return;
+        }
+        
+        try {
+             const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${orsKey}&text=Milano`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+            }
+            setTestOrsResult({ type: 'success', message: 'Connessione riuscita! La chiave OpenRouteService è valida.' });
+        } catch (error) {
+            console.error("ORS connection test failed:", error);
+            const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
+            setTestOrsResult({ type: 'error', message: `Verifica fallita: ${errorMessage}` });
+        } finally {
+            setIsTestingOrs(false);
         }
     };
 
@@ -132,7 +161,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
         }
     };
 
-    const isAnyActionInProgress = isTesting || isSavingGemini || isSavingMaps || isSavingOrs;
+    const isAnyActionInProgress = isTestingGemini || isSavingGemini || isSavingMaps || isTestingOrs || isSavingOrs;
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto space-y-8">
@@ -170,20 +199,20 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                         {saveGeminiResult.message}
                     </div>
                 )}
-                {testResult && (
-                    <div className={`p-3 rounded-lg text-sm ${testResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {testResult.message}
+                {testGeminiResult && (
+                    <div className={`p-3 rounded-lg text-sm ${testGeminiResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {testGeminiResult.message}
                     </div>
                 )}
 
                 <div className="flex justify-end items-center gap-4 pt-4 border-t">
                      <button
                         type="button"
-                        onClick={handleTestConnection}
+                        onClick={handleTestGeminiConnection}
                         disabled={isAnyActionInProgress}
                         className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
                     >
-                        {isTesting ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
+                        {isTestingGemini ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
                     </button>
                     <button
                         type="button"
@@ -263,14 +292,27 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                         </button>
                     </div>
                 </div>
-
+                
                 {saveOrsResult && (
                     <div className={`p-3 rounded-lg text-sm ${saveOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {saveOrsResult.message}
                     </div>
                 )}
+                {testOrsResult && (
+                    <div className={`p-3 rounded-lg text-sm ${testOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {testOrsResult.message}
+                    </div>
+                )}
 
                 <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                    <button
+                        type="button"
+                        onClick={handleTestOrsConnection}
+                        disabled={isAnyActionInProgress}
+                        className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
+                    >
+                        {isTestingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
+                    </button>
                     <button
                         type="button"
                         onClick={handleSaveOrsKey}
