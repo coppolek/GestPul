@@ -99,3 +99,12 @@ export interface ApiKey {
     name: string;
     key: string;
 }
+
+// --- Dashboard Types ---
+export interface Message {
+  id: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  timestamp: string; // ISO string
+}

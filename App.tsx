@@ -51,6 +51,7 @@ const MainLayout: React.FC = () => {
         schedules, setSchedules,
         users, setUsers,
         apiKeys, setApiKeys,
+        messages, setMessages,
         loading
     } = useAppData();
 
@@ -73,7 +74,7 @@ const MainLayout: React.FC = () => {
                 </header>
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8">
                     <Routes>
-                        <Route path="/" element={<Dashboard employees={employees} sites={sites} />} />
+                        <Route path="/" element={<Dashboard employees={employees} sites={sites} messages={messages} setMessages={setMessages} />} />
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
                         
@@ -104,7 +105,7 @@ const Sidebar: React.FC = () => {
     const { user } = useAuth();
 
     const navItems = [
-        { path: '/', icon: 'fa-tachometer-alt', label: 'Dashboard', roles: ['Amministratore', 'Responsabile'] },
+        { path: '/', icon: 'fa-tachometer-alt', label: 'Dashboard', roles: ['Amministratore', 'Responsabile', 'Lavoratore'] },
         { path: '/dipendenti', icon: 'fa-users', label: 'Dipendenti', roles: ['Amministratore', 'Responsabile'] },
         { path: '/cantieri', icon: 'fa-building-user', label: 'Cantieri', roles: ['Amministratore', 'Responsabile'] },
         {

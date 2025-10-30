@@ -1,9 +1,9 @@
 // A simple in-memory database that simulates a backend API.
 // It uses localStorage for persistence.
 
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message } from '../types';
 
-type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys';
+type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages';
 
 type DataShape = {
     employees: Employee[];
@@ -13,6 +13,7 @@ type DataShape = {
     schedules: Schedule[];
     users: User[];
     apiKeys: ApiKey[];
+    messages: Message[];
 };
 
 const DB_KEY = 'coppolecchia_db';
@@ -53,7 +54,8 @@ const initialData: DataShape = {
       { id: 'google_gemini', name: 'Google Gemini API Key', key: '' },
       { id: 'google_maps', name: 'Google Maps API Key', key: '' },
       { id: 'open_route_service', name: 'OpenRouteService API Key', key: '' },
-  ]
+  ],
+  messages: []
 };
 
 const getDb = (): DataShape => {
