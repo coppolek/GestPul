@@ -95,7 +95,7 @@ export interface User {
 
 // --- Settings Types ---
 export interface ApiKey {
-    id: 'google_gemini'; // Can be expanded with a union type for more keys
+    id: 'google_gemini' | 'google_maps';
     name: string;
     key: string;
 }

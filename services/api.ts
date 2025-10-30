@@ -50,7 +50,8 @@ const initialData: DataShape = {
       { id: 'user-3', username: 'mario.rossi', password: 'test', role: 'Lavoratore', employeeId: 'emp-1' },
   ],
   apiKeys: [
-      { id: 'google_gemini', name: 'Google Gemini API Key', key: '' }
+      { id: 'google_gemini', name: 'Google Gemini API Key', key: '' },
+      { id: 'google_maps', name: 'Google Maps API Key', key: '' },
   ]
 };
 

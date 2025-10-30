@@ -10,40 +10,54 @@ interface ApiSettingsProps {
 }
 
 const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
+    // Gemini State
     const geminiApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'google_gemini'), [apiKeys]);
-    
-    const [currentKey, setCurrentKey] = useState('');
-    const [isKeyVisible, setIsKeyVisible] = useState(false);
+    const [geminiKey, setGeminiKey] = useState('');
+    const [isGeminiKeyVisible, setIsGeminiKeyVisible] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [isSavingGemini, setIsSavingGemini] = useState(false);
     const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [saveResult, setSaveResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [saveGeminiResult, setSaveGeminiResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     
+    // Maps State
+    const mapsApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'google_maps'), [apiKeys]);
+    const [mapsKey, setMapsKey] = useState('');
+    const [isMapsKeyVisible, setIsMapsKeyVisible] = useState(false);
+    const [isSavingMaps, setIsSavingMaps] = useState(false);
+    const [saveMapsResult, setSaveMapsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
     useEffect(() => {
         if (geminiApiKeyObject) {
-            setCurrentKey(geminiApiKeyObject.key);
+            setGeminiKey(geminiApiKeyObject.key);
         }
     }, [geminiApiKeyObject]);
+
+    useEffect(() => {
+        if (mapsApiKeyObject) {
+            setMapsKey(mapsApiKeyObject.key);
+        }
+    }, [mapsApiKeyObject]);
 
     const handleTestConnection = async () => {
         setIsTesting(true);
         setTestResult(null);
-        setSaveResult(null);
+        setSaveGeminiResult(null);
+        setSaveMapsResult(null);
 
-        if (!currentKey.trim()) {
-            setTestResult({ type: 'error', message: 'Inserisci una chiave API per eseguire il test.' });
+        if (!geminiKey.trim()) {
+            setTestResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
             setIsTesting(false);
             return;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: currentKey });
+            const ai = new GoogleGenAI({ apiKey: geminiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: 'Ciao',
             });
             if (response.text !== undefined) {
-                 setTestResult({ type: 'success', message: 'Connessione riuscita! La chiave API è valida.' });
+                 setTestResult({ type: 'success', message: 'Connessione riuscita! La chiave API Gemini è valida.' });
             } else {
                 throw new Error("La risposta dell'API non era nel formato previsto.");
             }
@@ -56,55 +70,80 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
         }
     };
 
-    const handleSaveKey = async () => {
+    const handleSaveGeminiKey = async () => {
         if (!geminiApiKeyObject) return;
-        setIsSaving(true);
-        setSaveResult(null);
+        setIsSavingGemini(true);
+        setSaveGeminiResult(null);
         setTestResult(null);
+        setSaveMapsResult(null);
 
         try {
-            const updatedKey = { ...geminiApiKeyObject, key: currentKey };
+            const updatedKey = { ...geminiApiKeyObject, key: geminiKey };
             const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
             setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
-            setSaveResult({ type: 'success', message: 'Chiave API salvata con successo!' });
+            setSaveGeminiResult({ type: 'success', message: 'Chiave API Gemini salvata con successo!' });
         } catch (error) {
             console.error("Failed to save API key:", error);
-            setSaveResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+            setSaveGeminiResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
         } finally {
-            setIsSaving(false);
+            setIsSavingGemini(false);
+        }
+    };
+    
+    const handleSaveMapsKey = async () => {
+        if (!mapsApiKeyObject) return;
+        setIsSavingMaps(true);
+        setSaveMapsResult(null);
+        setTestResult(null);
+        setSaveGeminiResult(null);
+
+        try {
+            const updatedKey = { ...mapsApiKeyObject, key: mapsKey };
+            const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
+            setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
+            setSaveMapsResult({ type: 'success', message: 'Chiave API Maps salvata con successo!' });
+        } catch (error) {
+            console.error("Failed to save API key:", error);
+            setSaveMapsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+        } finally {
+            setIsSavingMaps(false);
         }
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Impostazioni API</h2>
-            <p className="text-sm text-gray-500 mb-6">Gestisci e verifica le tue chiavi API per i servizi esterni.</p>
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto space-y-8">
+            <div>
+                <h2 className="text-2xl font-bold text-gray-800">Impostazioni API</h2>
+                <p className="text-sm text-gray-500 mt-1">Gestisci e verifica le tue chiavi API per i servizi esterni.</p>
+            </div>
             
-            <div className="space-y-4">
+            {/* Gemini Section */}
+            <div className="p-4 border rounded-lg space-y-4">
+                <h3 className="text-lg font-semibold text-gray-700">{geminiApiKeyObject?.name}</h3>
                 <div>
-                    <label htmlFor="gemini-key" className="block text-lg font-semibold text-gray-700 mb-2">Google Gemini API Key</label>
                     <div className="relative">
                         <input
                             id="gemini-key"
-                            type={isKeyVisible ? 'text' : 'password'}
-                            value={currentKey}
-                            onChange={(e) => setCurrentKey(e.target.value)}
+                            type={isGeminiKeyVisible ? 'text' : 'password'}
+                            value={geminiKey}
+                            onChange={(e) => setGeminiKey(e.target.value)}
                             placeholder="Incolla qui la tua chiave API"
                             className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
                         />
                         <button
                             type="button"
-                            onClick={() => setIsKeyVisible(!isKeyVisible)}
+                            onClick={() => setIsGeminiKeyVisible(!isGeminiKeyVisible)}
                             className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                            aria-label="Mostra/Nascondi chiave"
                         >
-                            <i className={`fa-solid ${isKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                            <i className={`fa-solid ${isGeminiKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
                     </div>
                 </div>
 
-                {saveResult && (
-                    <div className={`p-3 rounded-lg text-sm ${saveResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {saveResult.message}
+                {saveGeminiResult && (
+                    <div className={`p-3 rounded-lg text-sm ${saveGeminiResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {saveGeminiResult.message}
                     </div>
                 )}
                 {testResult && (
@@ -117,21 +156,65 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                      <button
                         type="button"
                         onClick={handleTestConnection}
-                        disabled={isTesting || isSaving}
+                        disabled={isTesting || isSavingGemini || isSavingMaps}
                         className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
                     >
                         {isTesting ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
                     </button>
                     <button
                         type="button"
-                        onClick={handleSaveKey}
-                        disabled={isSaving || isTesting}
+                        onClick={handleSaveGeminiKey}
+                        disabled={isSavingGemini || isTesting || isSavingMaps}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
                     >
-                        {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                        {isSavingGemini ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
                     </button>
                 </div>
             </div>
+
+            {/* Maps Section */}
+            <div className="p-4 border rounded-lg space-y-4">
+                <h3 className="text-lg font-semibold text-gray-700">{mapsApiKeyObject?.name}</h3>
+                <p className="text-xs text-gray-500 -mt-3">Usata per calcolare le distanze nella funzionalità "Trova Operatori".</p>
+                <div>
+                    <div className="relative">
+                        <input
+                            id="maps-key"
+                            type={isMapsKeyVisible ? 'text' : 'password'}
+                            value={mapsKey}
+                            onChange={(e) => setMapsKey(e.target.value)}
+                            placeholder="Incolla qui la tua chiave API"
+                            className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setIsMapsKeyVisible(!isMapsKeyVisible)}
+                            className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                             aria-label="Mostra/Nascondi chiave"
+                        >
+                            <i className={`fa-solid ${isMapsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                        </button>
+                    </div>
+                </div>
+
+                {saveMapsResult && (
+                    <div className={`p-3 rounded-lg text-sm ${saveMapsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {saveMapsResult.message}
+                    </div>
+                )}
+
+                <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                    <button
+                        type="button"
+                        onClick={handleSaveMapsKey}
+                        disabled={isSavingMaps || isSavingGemini || isTesting}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
+                    >
+                        {isSavingMaps ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                    </button>
+                </div>
+            </div>
+
         </div>
     );
 };

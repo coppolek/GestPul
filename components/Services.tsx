@@ -77,8 +77,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 updatedAssignments = [...selectedSite.assignments, newAssignment];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            // FIX: Explicitly cast the result of the awaited API call to ensure type safety.
-            const savedSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite) as WorkSite;
+            // FIX: Replaced type cast with an explicit type annotation on the variable for better type safety.
+            const savedSite: WorkSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
             setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             handleCloseModals();
         } catch (error) {
@@ -96,8 +96,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             try {
                 const updatedAssignments = site.assignments.filter(a => a.id !== assignmentId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                // FIX: Explicitly cast the result of the awaited API call to ensure type safety.
-                const savedSite = await api.updateData<WorkSite>('sites', site.id, updatedSite) as WorkSite;
+                // FIX: Replaced type cast with an explicit type annotation on the variable for better type safety.
+                const savedSite: WorkSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
                 setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             } catch (error)
 {
@@ -163,8 +163,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Explicitly cast the result of `Promise.all` to handle type inference issues where it returns `unknown[]`.
-                const updatedSitesFromApi = (await Promise.all(updatePromises)) as WorkSite[];
+                // FIX: Replaced type cast with an explicit type annotation on the variable to correctly handle the result of Promise.all.
+                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
