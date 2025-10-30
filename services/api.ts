@@ -78,22 +78,15 @@ const getDb = (): DataShape => {
     if (db) {
         let dbWasModified = false;
         const initialApiKeyMap = new Map(initialData.apiKeys.map(k => [k.id, k]));
+        const existingApiKeyIds = new Set(db.apiKeys.map(k => k.id));
 
-        // Update existing keys if they exist but are empty, or add new ones
-        for (const [id, initialKeyObject] of initialApiKeyMap.entries()) {
-            const existingKeyIndex = db.apiKeys.findIndex(k => k.id === id);
-
-            if (existingKeyIndex === -1) {
-                // Key doesn't exist, add it
-                db.apiKeys.push(initialKeyObject);
-                dbWasModified = true;
-            } else if (!db.apiKeys[existingKeyIndex].key && initialKeyObject.key) {
-                // Key exists but is empty, and initial data has a value - update it
-                db.apiKeys[existingKeyIndex].key = initialKeyObject.key;
+        for (const [id, keyObject] of initialApiKeyMap.entries()) {
+            if (!existingApiKeyIds.has(id)) {
+                db.apiKeys.push(keyObject);
                 dbWasModified = true;
             }
         }
-
+        
         if (dbWasModified) {
             saveDb(db);
         }
