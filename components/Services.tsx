@@ -77,7 +77,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 updatedAssignments = [...selectedSite.assignments, newAssignment];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            const savedSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
+            // FIX: Explicitly type `savedSite` to avoid `unknown` type from await.
+            const savedSite: WorkSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
             setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             handleCloseModals();
         } catch (error) {
@@ -95,7 +96,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             try {
                 const updatedAssignments = site.assignments.filter(a => a.id !== assignmentId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                const savedSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
+                // FIX: Explicitly type `savedSite` to avoid `unknown` type from await.
+                const savedSite: WorkSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
                 setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             } catch (error) {
                 console.error("Failed to delete assignment", error);

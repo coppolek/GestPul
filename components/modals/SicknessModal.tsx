@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Employee, SicknessRecord } from '../../types';
 
 interface SicknessModalProps {
@@ -17,7 +17,63 @@ const SicknessModal: React.FC<SicknessModalProps> = ({ isOpen, onClose, onSave, 
     notes: '',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  // State for searchable dropdown
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Filter employees based on search
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) {
+      return employees;
+    }
+    return employees.filter(emp =>
+      `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(employeeSearch.toLowerCase())
+    );
+  }, [employees, employeeSearch]);
+
+  // Reset state when modal is opened
+  useEffect(() => {
+    if (isOpen) {
+        setFormData({
+            employeeId: '',
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: new Date().toISOString().split('T')[0],
+            notes: '',
+        });
+        setEmployeeSearch('');
+        setIsEmployeeDropdownOpen(false);
+    }
+  }, [isOpen]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsEmployeeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleEmployeeSelect = (employee: Employee) => {
+    setFormData(prev => ({ ...prev, employeeId: employee.id }));
+    setEmployeeSearch(`${employee.firstName} ${employee.lastName}`);
+    setIsEmployeeDropdownOpen(false);
+  };
+  
+  const handleEmployeeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEmployeeSearch(e.target.value);
+      setFormData(prev => ({...prev, employeeId: ''})); // Clear ID on new search
+      if (!isEmployeeDropdownOpen) {
+          setIsEmployeeDropdownOpen(true);
+      }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -25,7 +81,7 @@ const SicknessModal: React.FC<SicknessModalProps> = ({ isOpen, onClose, onSave, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
      if (!formData.employeeId) {
-      alert('Selezionare un dipendente');
+      alert('Selezionare un dipendente valido dalla lista.');
       return;
     }
     onSave(formData);
@@ -45,10 +101,34 @@ const SicknessModal: React.FC<SicknessModalProps> = ({ isOpen, onClose, onSave, 
           <fieldset disabled={isSaving}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dipendente</label>
-              <select name="employeeId" value={formData.employeeId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg" required>
-                <option value="">Seleziona dipendente...</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>)}
-              </select>
+              <div className="relative" ref={dropdownRef}>
+                <input
+                    type="text"
+                    value={employeeSearch}
+                    onChange={handleEmployeeSearchChange}
+                    onFocus={() => setIsEmployeeDropdownOpen(true)}
+                    placeholder="Cerca dipendente..."
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                    autoComplete="off"
+                />
+                {isEmployeeDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredEmployees.length > 0 ? (
+                            filteredEmployees.map(emp => (
+                                <div 
+                                    key={emp.id}
+                                    onClick={() => handleEmployeeSelect(emp)}
+                                    className="p-2 hover:bg-blue-100 cursor-pointer"
+                                >
+                                    {emp.firstName} {emp.lastName}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-2 text-gray-500">Nessun dipendente trovato.</div>
+                        )}
+                    </div>
+                )}
+              </div>
             </div>
              <div className="grid grid-cols-2 gap-4">
               <div>
