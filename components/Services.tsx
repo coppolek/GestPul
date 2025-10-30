@@ -77,8 +77,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 updatedAssignments = [...selectedSite.assignments, newAssignment];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            // FIX: Replaced type cast with an explicit type annotation on the variable for better type safety.
-            const savedSite: WorkSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
+            // FIX: Explicitly specify the WorkSite type to ensure correct type inference for the returned site.
+            const savedSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
             setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             handleCloseModals();
         } catch (error) {
@@ -96,11 +96,10 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             try {
                 const updatedAssignments = site.assignments.filter(a => a.id !== assignmentId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                // FIX: Replaced type cast with an explicit type annotation on the variable for better type safety.
-                const savedSite: WorkSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
+                // FIX: Explicitly specify the WorkSite type to ensure correct type inference for the returned site.
+                const savedSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
                 setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
-            } catch (error)
-{
+            } catch (error) {
                 console.error("Failed to delete assignment", error);
                 alert("Eliminazione fallita.");
             }
@@ -163,8 +162,8 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     sitesToUpdatePayload.push(updatedSite);
                 }
                 const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Replaced type cast with an explicit type annotation on the variable to correctly handle the result of Promise.all.
-                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
+                // FIX: Explicitly provide the WorkSite type to api.updateData so Promise.all can infer the correct return type.
+                const updatedSitesFromApi = await Promise.all(updatePromises);
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));

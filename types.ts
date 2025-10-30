@@ -95,7 +95,7 @@ export interface User {
 
 // --- Settings Types ---
 export interface ApiKey {
-    id: 'google_gemini' | 'google_maps';
+    id: 'google_gemini' | 'google_maps' | 'open_route_service';
     name: string;
     key: string;
 }

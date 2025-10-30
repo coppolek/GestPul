@@ -26,23 +26,31 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const [isSavingMaps, setIsSavingMaps] = useState(false);
     const [saveMapsResult, setSaveMapsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-    useEffect(() => {
-        if (geminiApiKeyObject) {
-            setGeminiKey(geminiApiKeyObject.key);
-        }
-    }, [geminiApiKeyObject]);
+    // OpenRouteService State
+    const orsApiKeyObject = useMemo(() => apiKeys.find(k => k.id === 'open_route_service'), [apiKeys]);
+    const [orsKey, setOrsKey] = useState('');
+    const [isOrsKeyVisible, setIsOrsKeyVisible] = useState(false);
+    const [isSavingOrs, setIsSavingOrs] = useState(false);
+    const [saveOrsResult, setSaveOrsResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
     useEffect(() => {
-        if (mapsApiKeyObject) {
-            setMapsKey(mapsApiKeyObject.key);
-        }
-    }, [mapsApiKeyObject]);
+        if (geminiApiKeyObject) setGeminiKey(geminiApiKeyObject.key);
+        if (mapsApiKeyObject) setMapsKey(mapsApiKeyObject.key);
+        if (orsApiKeyObject) setOrsKey(orsApiKeyObject.key);
+    }, [geminiApiKeyObject, mapsApiKeyObject, orsApiKeyObject]);
 
-    const handleTestConnection = async () => {
-        setIsTesting(true);
+
+    const clearResults = () => {
         setTestResult(null);
         setSaveGeminiResult(null);
         setSaveMapsResult(null);
+        setSaveOrsResult(null);
+    }
+
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        clearResults();
 
         if (!geminiKey.trim()) {
             setTestResult({ type: 'error', message: 'Inserisci una chiave API Gemini per eseguire il test.' });
@@ -73,9 +81,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const handleSaveGeminiKey = async () => {
         if (!geminiApiKeyObject) return;
         setIsSavingGemini(true);
-        setSaveGeminiResult(null);
-        setTestResult(null);
-        setSaveMapsResult(null);
+        clearResults();
 
         try {
             const updatedKey = { ...geminiApiKeyObject, key: geminiKey };
@@ -93,9 +99,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
     const handleSaveMapsKey = async () => {
         if (!mapsApiKeyObject) return;
         setIsSavingMaps(true);
-        setSaveMapsResult(null);
-        setTestResult(null);
-        setSaveGeminiResult(null);
+        clearResults();
 
         try {
             const updatedKey = { ...mapsApiKeyObject, key: mapsKey };
@@ -109,6 +113,26 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
             setIsSavingMaps(false);
         }
     };
+
+    const handleSaveOrsKey = async () => {
+        if (!orsApiKeyObject) return;
+        setIsSavingOrs(true);
+        clearResults();
+
+        try {
+            const updatedKey = { ...orsApiKeyObject, key: orsKey };
+            const savedKey = await api.updateData<ApiKey>('apiKeys', updatedKey.id, updatedKey);
+            setApiKeys(prev => prev.map(k => k.id === savedKey.id ? savedKey : k));
+            setSaveOrsResult({ type: 'success', message: 'Chiave API OpenRouteService salvata con successo!' });
+        } catch (error) {
+            console.error("Failed to save API key:", error);
+            setSaveOrsResult({ type: 'error', message: 'Salvataggio fallito. Riprova.' });
+        } finally {
+            setIsSavingOrs(false);
+        }
+    };
+
+    const isAnyActionInProgress = isTesting || isSavingGemini || isSavingMaps || isSavingOrs;
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto space-y-8">
@@ -156,7 +180,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                      <button
                         type="button"
                         onClick={handleTestConnection}
-                        disabled={isTesting || isSavingGemini || isSavingMaps}
+                        disabled={isAnyActionInProgress}
                         className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-300 w-44"
                     >
                         {isTesting ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Verifica Connessione'}
@@ -164,7 +188,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                     <button
                         type="button"
                         onClick={handleSaveGeminiKey}
-                        disabled={isSavingGemini || isTesting || isSavingMaps}
+                        disabled={isAnyActionInProgress}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
                     >
                         {isSavingGemini ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
@@ -175,7 +199,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
             {/* Maps Section */}
             <div className="p-4 border rounded-lg space-y-4">
                 <h3 className="text-lg font-semibold text-gray-700">{mapsApiKeyObject?.name}</h3>
-                <p className="text-xs text-gray-500 -mt-3">Usata per calcolare le distanze nella funzionalità "Trova Operatori".</p>
+                <p className="text-xs text-gray-500 -mt-3">Alternativa a OpenRouteService per il calcolo distanze.</p>
                 <div>
                     <div className="relative">
                         <input
@@ -207,10 +231,53 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ apiKeys, setApiKeys }) => {
                     <button
                         type="button"
                         onClick={handleSaveMapsKey}
-                        disabled={isSavingMaps || isSavingGemini || isTesting}
+                        disabled={isAnyActionInProgress}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
                     >
                         {isSavingMaps ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
+                    </button>
+                </div>
+            </div>
+
+            {/* OpenRouteService Section */}
+            <div className="p-4 border rounded-lg space-y-4">
+                <h3 className="text-lg font-semibold text-gray-700">{orsApiKeyObject?.name}</h3>
+                <p className="text-xs text-gray-500 -mt-3">Consigliato per calcolare le distanze nella funzionalità "Trova Operatori".</p>
+                <div>
+                    <div className="relative">
+                        <input
+                            id="ors-key"
+                            type={isOrsKeyVisible ? 'text' : 'password'}
+                            value={orsKey}
+                            onChange={(e) => setOrsKey(e.target.value)}
+                            placeholder="Incolla qui la tua chiave API"
+                            className="w-full p-3 pr-10 border border-gray-300 rounded-lg"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setIsOrsKeyVisible(!isOrsKeyVisible)}
+                            className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+                             aria-label="Mostra/Nascondi chiave"
+                        >
+                            <i className={`fa-solid ${isOrsKeyVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                        </button>
+                    </div>
+                </div>
+
+                {saveOrsResult && (
+                    <div className={`p-3 rounded-lg text-sm ${saveOrsResult.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {saveOrsResult.message}
+                    </div>
+                )}
+
+                <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                    <button
+                        type="button"
+                        onClick={handleSaveOrsKey}
+                        disabled={isAnyActionInProgress}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 w-44"
+                    >
+                        {isSavingOrs ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Chiave'}
                     </button>
                 </div>
             </div>

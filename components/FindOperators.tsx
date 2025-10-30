@@ -34,7 +34,7 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
     const [error, setError] = useState<string | null>(null);
     const [searchPerformed, setSearchPerformed] = useState(false);
     
-    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
+    const openRouteServiceApiKey = useMemo(() => apiKeys.find(k => k.id === 'open_route_service')?.key, [apiKeys]);
 
     const handleDayToggle = (day: string) => {
         setWorkingDays(prev => 
@@ -47,96 +47,12 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
         setError(null);
         setResults([]);
         setSearchPerformed(true);
-
-        // --- Step 1: Local Algorithm for Availability Check ---
-        const allAssignments = sites.flatMap(site => 
-            site.assignments.map(a => ({
-                employeeId: a.employeeId,
-                workingDays: a.workingDays,
-                workingHours: a.workingHours
-            }))
-        );
-
-        const availableEmployees = employees.filter(employee => {
-            const hasConflict = allAssignments.some(assignment => {
-                if (assignment.employeeId !== employee.id) return false;
-
-                const daysOverlap = assignment.workingDays.some(day => workingDays.includes(day));
-                if (!daysOverlap) return false;
-
-                return doTimesOverlap(assignment.workingHours, workingHours);
-            });
-            return !hasConflict;
-        });
         
-        if (availableEmployees.length === 0) {
-            setIsLoading(false);
-            return;
-        }
-
-        // --- Step 2: Use AI to calculate distances for available employees ---
-        if (!geminiApiKey) {
-            setError("Chiave API Gemini non configurata. Vai su Impostazioni API.");
-            setIsLoading(false);
-            return;
-        }
-        if (!address.trim()) {
-            setError("L'indirizzo del cantiere è obbligatorio per calcolare le distanze.");
-            setIsLoading(false);
-            return;
-        }
-
-        try {
-            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-            const prompt = `
-              TASK: Calculate driving distance for a list of employees to a new worksite and sort them.
-              
-              CONTEXT: 
-              - New worksite address: "${address}"
-              - List of available employees with their home addresses: ${JSON.stringify(availableEmployees.map(e => ({id: e.id, address: e.address})))}.
-
-              INSTRUCTIONS:
-              1. For each employee in the provided list, use Google Maps to calculate the driving distance from their home address to the new worksite address.
-              2. Sort the employees based on this distance, from the shortest to the longest.
-              3. Return a JSON array of objects for all the provided employees for whom a distance could be calculated. Each object must contain 'id' and 'distance' (as a string, e.g., "15.3 km").
-
-              OUTPUT FORMAT:
-              You MUST return ONLY a valid JSON array of objects. Do not include any other text, explanations, or markdown formatting.
-              Example of a valid response:
-              [
-                { "id": "emp-3", "distance": "5.2 km" },
-                { "id": "emp-1", "distance": "12.8 km" }
-              ]
-            `;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash', // Using Flash for speed
-                contents: prompt,
-                config: { tools: [{googleMaps: {}}] }
-            });
-
-            const textResponse = response.text;
-            if (!textResponse) throw new Error("La risposta del modello è vuota.");
-
-            const jsonMatch = textResponse.match(/\[.*\]/s);
-            if (!jsonMatch) throw new Error("La risposta dell'AI non è in un formato JSON valido.");
-            
-            const distanceResults: {id: string; distance: string}[] = JSON.parse(jsonMatch[0]);
-
-            // --- Step 3: Combine, sort, and slice results locally ---
-            const finalResults = distanceResults.map(distInfo => {
-                const employee = availableEmployees.find(e => e.id === distInfo.id);
-                return { ...employee!, distance: distInfo.distance };
-            }).slice(0, 20); // Get the top 20
-
-            setResults(finalResults);
-
-        } catch(e: any) {
-            console.error("Error during search:", e);
-            setError(e.message || "Si è verificato un errore durante la ricerca.");
-        } finally {
-            setIsLoading(false);
-        }
+        // This is a placeholder for the future implementation with OpenRouteService.
+        // For now, it will be disabled.
+        
+        setError("La funzionalità di ricerca con OpenRouteService non è ancora stata implementata.");
+        setIsLoading(false);
     };
     
     const ALL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
@@ -145,12 +61,12 @@ const FindOperators: React.FC<FindOperatorsProps> = ({ employees, sites, apiKeys
         <div className="bg-white p-6 rounded-xl shadow-lg">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Cerca Operatori Vicini</h2>
             <p className="text-gray-600 mb-6">
-                Trova i 20 operatori disponibili più vicini a un nuovo cantiere tramite algoritmo.
+                Trova gli operatori disponibili più vicini a un nuovo cantiere utilizzando OpenRouteService per il calcolo delle distanze.
             </p>
 
             <div className="p-4 mb-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-lg">
-                <p className="font-bold">Funzionalità Disabilitata</p>
-                <p>Questa funzionalità utilizza API a pagamento ed è stata disabilitata come richiesto.</p>
+                <p className="font-bold">Funzionalità in Sviluppo</p>
+                <p>Questa funzionalità è stata predisposta per utilizzare OpenRouteService. Salva la chiave API nelle impostazioni per abilitare il calcolo delle distanze in un prossimo aggiornamento.</p>
             </div>
 
             <fieldset disabled>
