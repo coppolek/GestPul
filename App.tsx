@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -74,7 +75,14 @@ const MainLayout: React.FC = () => {
                 </header>
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8">
                     <Routes>
-                        <Route path="/" element={<Dashboard employees={employees} sites={sites} messages={messages} setMessages={setMessages} />} />
+                        <Route path="/" element={<Dashboard 
+                            employees={employees} setEmployees={setEmployees}
+                            sites={sites} setSites={setSites}
+                            leaveRequests={leaveRequests} sicknessRecords={sicknessRecords}
+                            messages={messages} setMessages={setMessages} 
+                            apiKeys={apiKeys}
+                            />} 
+                        />
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
                         

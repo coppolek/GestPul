@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import ServiceAssignmentModal from './modals/ServiceAssignmentModal';
@@ -163,10 +164,13 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     const updatedSite: WorkSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
                     sitesToUpdatePayload.push(updatedSite);
                 }
-                // FIX: Explicitly specify the WorkSite type to api.updateData to ensure correct type inference for Promise.all.
-                const updatePromises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
-                // FIX: Explicitly type `updatedSitesFromApi` to WorkSite[] to resolve a type inference issue with Promise.all.
-                const updatedSitesFromApi: WorkSite[] = await Promise.all(updatePromises);
+                // FIX: Refactored promise handling to use a sequential for-loop to avoid a complex
+                // type inference issue with Promise.all that caused build failures.
+                const updatedSitesFromApi: WorkSite[] = [];
+                for (const site of sitesToUpdatePayload) {
+                    const updatedSite = await api.updateData<WorkSite>('sites', site.id, site);
+                    updatedSitesFromApi.push(updatedSite);
+                }
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
