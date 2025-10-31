@@ -1,11 +1,10 @@
-
-
 import React from 'react';
-// FIX: Corrected type import from AppSettings to AppSetting.
 import { Employee, WorkSite, Message, LeaveRequest, SicknessRecord, ApiKey, AppSetting } from '../types';
 import * as api from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import GeminiCommandPrompt from './GeminiCommandPrompt'; // Importa il nuovo componente
+import GeminiCommandPrompt from './GeminiCommandPrompt';
+import BulletinBoard from './BulletinBoard'; // Import new component
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 interface DashboardProps {
   employees: Employee[];
@@ -17,13 +16,24 @@ interface DashboardProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   apiKeys: ApiKey[];
-  // FIX: Corrected type from AppSettings[] to AppSetting[].
   appSettings: AppSetting[];
 }
 
 const Dashboard: React.FC<DashboardProps> = (props) => {
-  const { employees, sites } = props;
+  const { user } = useAuth();
+  const { employees, sites, messages, setMessages } = props;
 
+  // Worker's Dashboard View
+  if (user?.role === 'Lavoratore') {
+    return (
+        <BulletinBoard 
+            messages={messages}
+            setMessages={setMessages}
+        />
+    );
+  }
+
+  // Admin & Responsabile Dashboard View
   const activeSites = sites.filter(site => site.status === 'In Corso').length;
   
   const getUpcomingExpiries = (days: number) => {
@@ -93,7 +103,6 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                {/* FIX: Pass the required appSettings prop to GeminiCommandPrompt */}
                 <GeminiCommandPrompt 
                     employees={props.employees}
                     sites={props.sites}
@@ -102,6 +111,14 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
                 />
             </div>
         </div>
+
+        {/* Show Bulletin Board management only for Admin */}
+        {user?.role === 'Amministratore' && (
+             <BulletinBoard 
+                messages={messages}
+                setMessages={setMessages}
+            />
+        )}
     </div>
   );
 };
