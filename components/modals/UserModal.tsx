@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Employee, Role } from '../../types';
 
 interface UserModalProps {
@@ -21,6 +21,11 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, user, is
   });
   const [error, setError] = useState('');
 
+  // State for searchable dropdown
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -30,6 +35,12 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, user, is
         role: user.role,
         employeeId: user.employeeId || '',
       });
+      if (user.employeeId) {
+          const employee = employees.find(e => e.id === user.employeeId);
+          setEmployeeSearch(employee ? `${employee.firstName} ${employee.lastName}` : '');
+      } else {
+          setEmployeeSearch('');
+      }
     } else {
       setFormData({
         username: '',
@@ -38,15 +49,31 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, user, is
         role: 'Lavoratore' as Role,
         employeeId: '',
       });
+      setEmployeeSearch('');
     }
     setError('');
-  }, [user]);
+  }, [user, employees]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsEmployeeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
      if(name === 'role' && value !== 'Lavoratore') {
         setFormData(prev => ({ ...prev, employeeId: '' }));
+        setEmployeeSearch('');
     }
   };
   
@@ -83,6 +110,31 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, user, is
         .map(u => u.employeeId);
       return employees.filter(e => !linkedEmployeeIds.includes(e.id));
   }, [users, employees, user]);
+
+  const filteredAvailableEmployees = useMemo(() => {
+    if (!employeeSearch) {
+        return availableEmployees;
+    }
+    const searchTerm = employeeSearch.toLowerCase();
+    return availableEmployees.filter(emp =>
+        `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm)
+    );
+  }, [availableEmployees, employeeSearch]);
+
+  const handleEmployeeSelect = (employee: Employee) => {
+    setFormData(prev => ({ ...prev, employeeId: employee.id }));
+    setEmployeeSearch(`${employee.firstName} ${employee.lastName}`);
+    setIsEmployeeDropdownOpen(false);
+  };
+  
+  const handleEmployeeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEmployeeSearch(e.target.value);
+      setFormData(prev => ({...prev, employeeId: ''})); // Clear ID on new search
+      if (!isEmployeeDropdownOpen) {
+          setIsEmployeeDropdownOpen(true);
+      }
+  };
+
 
   if (!isOpen) return null;
 
@@ -126,12 +178,34 @@ const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, user, is
                 {formData.role === 'Lavoratore' && (
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Collega a Dipendente</label>
-                        <select name="employeeId" value={formData.employeeId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg" required>
-                            <option value="">Seleziona dipendente...</option>
-                            {availableEmployees.map(emp => 
-                                <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
+                        <div className="relative" ref={dropdownRef}>
+                           <input
+                                type="text"
+                                value={employeeSearch}
+                                onChange={handleEmployeeSearchChange}
+                                onFocus={() => setIsEmployeeDropdownOpen(true)}
+                                placeholder="Cerca dipendente..."
+                                className="w-full p-2 border border-gray-300 rounded-lg"
+                                autoComplete="off"
+                            />
+                            {isEmployeeDropdownOpen && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                    {filteredAvailableEmployees.length > 0 ? (
+                                        filteredAvailableEmployees.map(emp => (
+                                            <div
+                                                key={emp.id}
+                                                onClick={() => handleEmployeeSelect(emp)}
+                                                className="p-2 hover:bg-blue-100 cursor-pointer"
+                                            >
+                                                {emp.firstName} {emp.lastName}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="p-2 text-gray-500">Nessun dipendente trovato.</div>
+                                    )}
+                                </div>
                             )}
-                        </select>
+                        </div>
                     </div>
                 )}
             </fieldset>
