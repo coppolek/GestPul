@@ -156,11 +156,10 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     const employeesForThisSite = employeesToUpdateBySite.get(siteId);
 
                     if (originalSite && employeesForThisSite) {
-                        // FIX: Corrected a typo in the variable name from `employeesForThis-site` to `employeesForThisSite`.
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Explicitly construct the updatedSite object to resolve a type inference issue with the spread operator.
-                        const updatedSite: WorkSite = { 
+                        // FIX: Explicitly constructing the object with all its properties resolves the type error. The spread operator on `originalSite` was causing a type inference issue.
+                        const updatedSite: WorkSite = {
                             id: originalSite.id,
                             name: originalSite.name,
                             client: originalSite.client,
@@ -168,7 +167,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                             startDate: originalSite.startDate,
                             endDate: originalSite.endDate,
                             status: originalSite.status,
-                            assignments: [...existingAssignmentsToKeep, ...newAssignments] 
+                            assignments: [...existingAssignmentsToKeep, ...newAssignments]
                         };
                         sitesToUpdatePayload.push(updatedSite);
                     }

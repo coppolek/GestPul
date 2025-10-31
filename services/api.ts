@@ -102,17 +102,30 @@ const getDb = (): DataShape => {
         console.error("Failed to parse DB from localStorage", e);
     }
     
-    // If DB exists, check for missing keys and add them (simple migration)
+    // If DB exists, run migrations for robustness
     if (db) {
         let dbWasModified = false;
-        if (!db.attendances) {
-          db.attendances = initialData.attendances;
-          dbWasModified = true;
-        }
 
+        // --- Comprehensive Array Collection Migration ---
+        // Ensures all top-level collections exist and are arrays.
+        const arrayCollections: CollectionName[] = [
+            'employees', 'sites', 'leaveRequests', 'sicknessRecords', 
+            'attendances', 'schedules', 'users', 'apiKeys', 'messages', 'appSettings'
+        ];
+        
+        for (const collection of arrayCollections) {
+            if (!db.hasOwnProperty(collection) || !Array.isArray((db as any)[collection])) {
+                console.warn(`DB Migration: Collection "${collection}" was missing or invalid. Initializing.`);
+                (db as any)[collection] = initialData[collection];
+                dbWasModified = true;
+            }
+        }
+        
+        // --- Deeper migration for specific items within collections ---
+        
+        // API Keys Migration: Ensures new API key slots are added if missing.
         const initialApiKeyMap = new Map(initialData.apiKeys.map(k => [k.id, k]));
         const existingApiKeyIds = new Set(db.apiKeys.map(k => k.id));
-
         for (const [id, keyObject] of initialApiKeyMap.entries()) {
             if (!existingApiKeyIds.has(id)) {
                 db.apiKeys.push(keyObject);
@@ -120,29 +133,21 @@ const getDb = (): DataShape => {
             }
         }
         
-        if (!db.appSettings || !Array.isArray(db.appSettings)) {
-            db.appSettings = initialData.appSettings;
+        // App Settings Migration: Ensures new settings are added if missing.
+        const initialAppSettingsMap = new Map(initialData.appSettings.map(s => [s.id, s]));
+        const existingAppSettingsIds = new Set(db.appSettings.map(s => s.id));
+        for (const [id, settingObject] of initialAppSettingsMap.entries()) {
+            if (!existingAppSettingsIds.has(id)) {
+                db.appSettings.push(settingObject);
+                dbWasModified = true;
+            }
+        }
+        
+        // Specific check for '/lavoratori' module visibility (nested property)
+        const visSetting = db.appSettings.find(s => s.id === 'module_visibility') as ModuleVisibility | undefined;
+        if (visSetting && visSetting.settings && !visSetting.settings['/lavoratori']) {
+            visSetting.settings['/lavoratori'] = ['Amministratore', 'Lavoratore'];
             dbWasModified = true;
-        } else {
-            // Check for individual settings
-            if (!db.appSettings.find(s => s.id === 'ai_provider')) {
-                db.appSettings.push(initialData.appSettings.find(s => s.id === 'ai_provider')!);
-                dbWasModified = true;
-            }
-            if (!db.appSettings.find(s => s.id === 'database_config')) {
-                db.appSettings.push(initialData.appSettings.find(s => s.id === 'database_config')!);
-                dbWasModified = true;
-            }
-            if (!db.appSettings.find(s => s.id === 'module_visibility')) {
-                db.appSettings.push(initialData.appSettings.find(s => s.id === 'module_visibility')!);
-                dbWasModified = true;
-            } else {
-                const visSetting = db.appSettings.find(s => s.id === 'module_visibility') as ModuleVisibility;
-                if(visSetting && !visSetting.settings['/lavoratori']) {
-                    visSetting.settings['/lavoratori'] = ['Amministratore', 'Lavoratore'];
-                    dbWasModified = true;
-                }
-            }
         }
 
         if (dbWasModified) {
