@@ -1,12 +1,13 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord } from '../types';
 
-type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings';
+type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings' | 'attendances';
 
 type DataShape = {
     employees: Employee[];
     sites: WorkSite[];
     leaveRequests: LeaveRequest[];
     sicknessRecords: SicknessRecord[];
+    attendances: AttendanceRecord[];
     schedules: Schedule[];
     users: User[];
     apiKeys: ApiKey[];
@@ -41,6 +42,13 @@ const initialData: DataShape = {
   ],
   sicknessRecords: [
     { id: 'sick-1', employeeId: 'emp-5', startDate: '2024-07-10', endDate: '2024-07-12', notes: 'Influenza' },
+  ],
+  attendances: [
+    { id: 'att-1', employeeId: 'emp-1', timestamp: '2024-07-22T08:01:15Z', type: 'Entrata' },
+    { id: 'att-2', employeeId: 'emp-1', timestamp: '2024-07-22T12:05:30Z', type: 'Uscita' },
+    { id: 'att-3', employeeId: 'emp-4', timestamp: '2024-07-22T09:00:05Z', type: 'Entrata' },
+    { id: 'att-4', employeeId: 'emp-4', timestamp: '2024-07-22T13:02:45Z', type: 'Uscita' },
+    { id: 'att-5', employeeId: 'emp-2', timestamp: '2024-07-23T14:00:00Z', type: 'Entrata' },
   ],
   schedules: [],
   users: [
@@ -83,6 +91,11 @@ const getDb = (): DataShape => {
     // If DB exists, check for missing keys and add them (simple migration)
     if (db) {
         let dbWasModified = false;
+        if (!db.attendances) {
+          db.attendances = initialData.attendances;
+          dbWasModified = true;
+        }
+
         const initialApiKeyMap = new Map(initialData.apiKeys.map(k => [k.id, k]));
         const existingApiKeyIds = new Set(db.apiKeys.map(k => k.id));
 

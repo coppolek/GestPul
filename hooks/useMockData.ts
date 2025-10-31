@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message, AppSetting } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message, AppSetting, AttendanceRecord } from '../types';
 import * as api from '../services/api';
 
 
@@ -8,6 +8,7 @@ export const useAppData = () => {
   const [sites, setSites] = useState<WorkSite[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [sicknessRecords, setSicknessRecords] = useState<SicknessRecord[]>([]);
+  const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -25,6 +26,7 @@ export const useAppData = () => {
                 sitesData, 
                 leaveRequestsData, 
                 sicknessRecordsData,
+                attendancesData,
                 schedulesData,
                 usersData,
                 apiKeysData,
@@ -35,6 +37,7 @@ export const useAppData = () => {
                 api.getData<WorkSite[]>('sites'),
                 api.getData<LeaveRequest[]>('leaveRequests'),
                 api.getData<SicknessRecord[]>('sicknessRecords'),
+                api.getData<AttendanceRecord[]>('attendances'),
                 api.getData<Schedule[]>('schedules'),
                 api.getData<User[]>('users'),
                 api.getData<ApiKey[]>('apiKeys'),
@@ -46,6 +49,7 @@ export const useAppData = () => {
             setSites(sitesData);
             setLeaveRequests(leaveRequestsData.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
             setSicknessRecords(sicknessRecordsData.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()));
+            setAttendances(attendancesData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
             setSchedules(schedulesData);
             setUsers(usersData);
             setApiKeys(apiKeysData);
@@ -67,6 +71,7 @@ export const useAppData = () => {
     sites, setSites, 
     leaveRequests, setLeaveRequests, 
     sicknessRecords, setSicknessRecords,
+    attendances, setAttendances,
     schedules, setSchedules, 
     users, setUsers,
     apiKeys, setApiKeys,

@@ -158,8 +158,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     if (originalSite && employeesForThisSite) {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Explicitly construct the updatedSite object instead of using a spread operator
-                        // to avoid a complex type inference issue that caused build failures.
+                        // FIX: Explicitly construct the updatedSite object to resolve a type inference issue with the spread operator.
                         const updatedSite: WorkSite = { 
                             id: originalSite.id,
                             name: originalSite.name,

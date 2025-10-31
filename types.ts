@@ -62,6 +62,14 @@ export interface SicknessRecord {
   notes?: string;
 }
 
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  timestamp: string; // ISO string for date and time
+  type: 'Entrata' | 'Uscita';
+  notes?: string;
+}
+
 // For JollyPlans component
 export interface Assignment {
     id: string;
