@@ -78,7 +78,6 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                 updatedAssignments = [...selectedSite.assignments, newAssignment];
             }
             const updatedSite = { ...selectedSite, assignments: updatedAssignments };
-            // FIX: Explicitly specify the WorkSite type to ensure correct type inference for the returned site.
             const savedSite = await api.updateData<WorkSite>('sites', selectedSite.id, updatedSite);
             setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             handleCloseModals();
@@ -97,7 +96,6 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             try {
                 const updatedAssignments = site.assignments.filter(a => a.id !== assignmentId);
                 const updatedSite = { ...site, assignments: updatedAssignments };
-                // FIX: Explicitly specify the WorkSite type to ensure correct type inference for the returned site.
                 const savedSite = await api.updateData<WorkSite>('sites', site.id, updatedSite);
                 setSites(prev => prev.map(s => s.id === savedSite.id ? savedSite : s));
             } catch (error) {
@@ -127,7 +125,6 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             const skipped: string[] = [];
 
             for (const service of services) {
-                // FIX: Explicitly type variables to prevent 'unknown' type inference issues.
                 const site: WorkSite | undefined = siteNameMap.get(normalize(service.siteName));
                 const employee: Employee | undefined = employeeNameMap.get(normalize(service.employeeName));
 
@@ -155,17 +152,27 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
             if (assignmentsBySite.size > 0) {
                  const sitesToUpdatePayload: WorkSite[] = [];
                 for (const [siteId, newAssignments] of assignmentsBySite.entries()) {
-                    const originalSite = sites.find(s => s.id === siteId)!;
-                    const employeesForThisSite = employeesToUpdateBySite.get(siteId)!;
+                    const originalSite = sites.find(s => s.id === siteId);
+                    const employeesForThisSite = employeesToUpdateBySite.get(siteId);
 
-                    const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
-                    
-                    // FIX: Explicitly type `updatedSite` to ensure it matches `WorkSite` and prevent type inference issues.
-                    const updatedSite: WorkSite = { ...originalSite, assignments: [...existingAssignmentsToKeep, ...newAssignments] };
-                    sitesToUpdatePayload.push(updatedSite);
+                    if (originalSite && employeesForThisSite) {
+                        const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
+                        
+                        // FIX: Explicitly construct the updatedSite object instead of using a spread operator
+                        // to avoid a complex type inference issue that caused build failures.
+                        const updatedSite: WorkSite = { 
+                            id: originalSite.id,
+                            name: originalSite.name,
+                            client: originalSite.client,
+                            address: originalSite.address,
+                            startDate: originalSite.startDate,
+                            endDate: originalSite.endDate,
+                            status: originalSite.status,
+                            assignments: [...existingAssignmentsToKeep, ...newAssignments] 
+                        };
+                        sitesToUpdatePayload.push(updatedSite);
+                    }
                 }
-                // FIX: Refactored promise handling to use a sequential for-loop to avoid a complex
-                // type inference issue with Promise.all that caused build failures.
                 const updatedSitesFromApi: WorkSite[] = [];
                 for (const site of sitesToUpdatePayload) {
                     const updatedSite = await api.updateData<WorkSite>('sites', site.id, site);

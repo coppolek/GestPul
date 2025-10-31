@@ -1,6 +1,6 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting } from '../types';
 
-type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages';
+type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings';
 
 type DataShape = {
     employees: Employee[];
@@ -11,6 +11,7 @@ type DataShape = {
     users: User[];
     apiKeys: ApiKey[];
     messages: Message[];
+    appSettings: AppSetting[];
 };
 
 const DB_KEY = 'coppolecchia_db';
@@ -49,10 +50,15 @@ const initialData: DataShape = {
   ],
   apiKeys: [
       { id: 'google_gemini', name: 'Google Gemini API Key', key: 'INSERISCI_QUI_LA_TUA_CHIAVE_API_GEMINI' },
+      { id: 'groq', name: 'Groq API Key', key: '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' },
       { id: 'google_maps', name: 'Google Maps API Key', key: '' },
       { id: 'open_route_service', name: 'OpenRouteService API Key', key: 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUzYmVjNGExMmI0NjRlMWU5OTQyNGE4YWRhZGIxOGUyIiwiaCI6Im11cm11cjY0In0=' },
   ],
-  messages: []
+  messages: [],
+  appSettings: [
+      { id: 'ai_provider', value: 'gemini' },
+      { id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' }
+  ]
 };
 
 const saveDb = (db: DataShape) => {
@@ -87,6 +93,21 @@ const getDb = (): DataShape => {
             }
         }
         
+        if (!db.appSettings || !Array.isArray(db.appSettings)) {
+            db.appSettings = initialData.appSettings;
+            dbWasModified = true;
+        } else {
+            // Check for individual settings
+            if (!db.appSettings.find(s => s.id === 'ai_provider')) {
+                db.appSettings.push({ id: 'ai_provider', value: 'gemini' });
+                dbWasModified = true;
+            }
+            if (!db.appSettings.find(s => s.id === 'database_config')) {
+                db.appSettings.push({ id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' });
+                dbWasModified = true;
+            }
+        }
+
         if (dbWasModified) {
             saveDb(db);
         }

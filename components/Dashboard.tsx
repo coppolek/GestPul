@@ -1,5 +1,8 @@
+
+
 import React from 'react';
-import { Employee, WorkSite, Message, LeaveRequest, SicknessRecord, ApiKey } from '../types';
+// FIX: Corrected type import from AppSettings to AppSetting.
+import { Employee, WorkSite, Message, LeaveRequest, SicknessRecord, ApiKey, AppSetting } from '../types';
 import * as api from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import GeminiCommandPrompt from './GeminiCommandPrompt'; // Importa il nuovo componente
@@ -14,6 +17,8 @@ interface DashboardProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   apiKeys: ApiKey[];
+  // FIX: Corrected type from AppSettings[] to AppSetting[].
+  appSettings: AppSetting[];
 }
 
 const Dashboard: React.FC<DashboardProps> = (props) => {
@@ -88,10 +93,12 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
+                {/* FIX: Pass the required appSettings prop to GeminiCommandPrompt */}
                 <GeminiCommandPrompt 
                     employees={props.employees}
                     sites={props.sites}
                     apiKeys={props.apiKeys}
+                    appSettings={props.appSettings}
                 />
             </div>
         </div>

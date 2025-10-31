@@ -1,15 +1,88 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as api from '../services/api';
+import { AppSetting, DatabaseConfig } from '../types';
 
-const DatabaseSettings: React.FC = () => {
-    const [isLoading, setIsLoading] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+interface DatabaseSettingsProps {
+    appSettings: AppSetting[];
+    setAppSettings: React.Dispatch<React.SetStateAction<AppSetting[]>>;
+}
+
+const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setAppSettings }) => {
+    const dbConfig = useMemo(() => appSettings.find(s => s.id === 'database_config') as DatabaseConfig | undefined, [appSettings]);
+    
+    // Local state for the forms
+    const [provider, setProvider] = useState<'local' | 'supabase' | 'firebase'>('local');
+    const [supabaseUrl, setSupabaseUrl] = useState('');
+    const [supabaseKey, setSupabaseKey] = useState('');
+    const [firebaseConfig, setFirebaseConfig] = useState('');
+
+    // State for local DB management
+    const [isLocalLoading, setIsLocalLoading] = useState(false);
+    const [localFeedback, setLocalFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleExport = () => {
-        setIsLoading(true);
-        setFeedback(null);
+    // State for remote DB management
+    const [isRemoteLoading, setIsRemoteLoading] = useState(false);
+    const [remoteFeedback, setRemoteFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    useEffect(() => {
+        if (dbConfig) {
+            setProvider(dbConfig.provider);
+            setSupabaseUrl(dbConfig.supabaseUrl || '');
+            setSupabaseKey(dbConfig.supabaseKey || '');
+            setFirebaseConfig(dbConfig.firebaseConfig || '');
+        }
+    }, [dbConfig]);
+
+    const handleSaveRemoteConfig = async () => {
+        if (!dbConfig) return;
+        setIsRemoteLoading(true);
+        setRemoteFeedback(null);
+        
+        const newConfig: DatabaseConfig = {
+            ...dbConfig,
+            provider,
+            supabaseUrl,
+            supabaseKey,
+            firebaseConfig
+        };
+
+        try {
+            const savedSetting = await api.updateData<DatabaseConfig>('appSettings', newConfig.id, newConfig);
+            setAppSettings(prev => prev.map(s => s.id === savedSetting.id ? savedSetting : s));
+            setRemoteFeedback({ type: 'success', message: 'Configurazione salvata con successo. Potrebbe essere necessario ricaricare la pagina per applicare le modifiche.' });
+        } catch (error) {
+            console.error("Failed to save DB config", error);
+            setRemoteFeedback({ type: 'error', message: 'Salvataggio fallito.' });
+        } finally {
+            setIsRemoteLoading(false);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        setIsRemoteLoading(true);
+        setRemoteFeedback(null);
+        try {
+            if (provider === 'supabase') {
+                if (!supabaseUrl || !supabaseKey) throw new Error("URL e Chiave Anon sono obbligatori.");
+                const response = await fetch(supabaseUrl, { headers: { 'apikey': supabaseKey } });
+                if (!response.ok) throw new Error(`Connessione fallita con stato: ${response.status}`);
+                setRemoteFeedback({ type: 'success', message: 'Test di connessione a Supabase riuscito!' });
+            } else if (provider === 'firebase') {
+                 if (!firebaseConfig) throw new Error("L'oggetto di configurazione è obbligatorio.");
+                 JSON.parse(firebaseConfig); // Test if it's valid JSON
+                 setRemoteFeedback({ type: 'success', message: 'Il formato della configurazione Firebase è valido. (Test di connessione reale non supportato in questa demo).' });
+            }
+        } catch (error: any) {
+            setRemoteFeedback({ type: 'error', message: `Test fallito: ${error.message}` });
+        } finally {
+            setIsRemoteLoading(false);
+        }
+    };
+
+    const handleExportLocal = () => {
+        setIsLocalLoading(true);
+        setLocalFeedback(null);
         try {
             const dbString = api.exportDbAsString();
             const blob = new Blob([dbString], { type: 'application/json' });
@@ -17,130 +90,157 @@ const DatabaseSettings: React.FC = () => {
             const a = document.createElement('a');
             a.href = url;
             const date = new Date().toISOString().split('T')[0];
-            a.download = `coppolecchia_backup_${date}.json`;
+            a.download = `coppolecchia_backup_locale_${date}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            setFeedback({ type: 'success', message: 'Database esportato con successo.' });
+            setLocalFeedback({ type: 'success', message: 'Database locale esportato con successo.' });
         } catch (error) {
             console.error("Export failed:", error);
-            setFeedback({ type: 'error', message: 'Esportazione fallita.' });
+            setLocalFeedback({ type: 'error', message: 'Esportazione fallita.' });
         } finally {
-            setIsLoading(false);
+            setIsLocalLoading(false);
         }
     };
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChangeLocal = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            if (!window.confirm("Sei sicuro di voler importare questo file? L'operazione sovrascriverà TUTTI i dati attuali e non è reversibile.")) {
+            if (!window.confirm("Sei sicuro di voler importare questo file? L'operazione sovrascriverà TUTTI i dati locali attuali e non è reversibile.")) {
                 if (fileInputRef.current) {
                     fileInputRef.current.value = "";
                 }
                 return;
             }
-            setIsLoading(true);
-            setFeedback(null);
+            setIsLocalLoading(true);
+            setLocalFeedback(null);
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
                     const content = e.target?.result as string;
                     api.importDbFromString(content);
-                    setFeedback({ type: 'success', message: "Importazione completata. L'applicazione verrà ricaricata." });
+                    setLocalFeedback({ type: 'success', message: "Importazione completata. L'applicazione verrà ricaricata." });
                     setTimeout(() => window.location.reload(), 2000);
                 } catch (error) {
                     console.error("Import failed:", error);
-                    setFeedback({ type: 'error', message: 'Importazione fallita. Il file potrebbe essere corrotto o non valido.' });
-                    setIsLoading(false);
+                    setLocalFeedback({ type: 'error', message: 'Importazione fallita. Il file potrebbe essere corrotto o non valido.' });
+                    setIsLocalLoading(false);
                 }
             };
             reader.onerror = () => {
-                 setFeedback({ type: 'error', message: 'Errore nella lettura del file.' });
-                 setIsLoading(false);
+                 setLocalFeedback({ type: 'error', message: 'Errore nella lettura del file.' });
+                 setIsLocalLoading(false);
             }
             reader.readAsText(file);
         }
     };
     
-    const handleClear = () => {
-        if (window.confirm("ATTENZIONE! Stai per cancellare l'intero database. Questa azione è IRREVERSIBILE. Sei assolutamente sicuro di voler procedere?")) {
-            setIsLoading(true);
-            setFeedback(null);
+    const handleClearLocal = () => {
+        if (window.confirm("ATTENZIONE! Stai per cancellare l'intero database locale. Questa azione è IRREVERSIBILE. Sei assolutamente sicuro di voler procedere?")) {
+            setIsLocalLoading(true);
+            setLocalFeedback(null);
             try {
                 api.clearDb();
-                setFeedback({ type: 'success', message: "Database svuotato. L'applicazione verrà ricaricata." });
+                setLocalFeedback({ type: 'success', message: "Database locale svuotato. L'applicazione verrà ricaricata." });
                 setTimeout(() => window.location.reload(), 2000);
             } catch(error) {
                 console.error("Clear DB failed:", error);
-                setFeedback({ type: 'error', message: 'Operazione fallita.' });
-                setIsLoading(false);
+                setLocalFeedback({ type: 'error', message: 'Operazione fallita.' });
+                setIsLocalLoading(false);
             }
         }
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-2xl mx-auto space-y-8">
-            <div>
-                <h2 className="text-2xl font-bold text-gray-800">Gestione Database</h2>
-                <p className="text-sm text-gray-500 mt-1">Esporta, importa o resetta i dati dell'applicazione.</p>
-            </div>
-            
-            {feedback && (
-                <div className={`p-3 rounded-lg text-sm ${feedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {feedback.message}
+        <div className="space-y-8">
+            <div className="bg-white p-6 rounded-xl shadow-lg max-w-3xl mx-auto space-y-6">
+                 <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Connessione Database Esterno</h2>
+                    <p className="text-sm text-gray-500 mt-1">Collega a un database Supabase o Firebase per condividere i dati. Attualmente in uso: <span className="font-semibold text-blue-600">{dbConfig?.provider}</span></p>
                 </div>
-            )}
 
-            {/* Export Section */}
-            <div className="p-4 border rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-700">Esporta Dati</h3>
-                <p className="text-sm text-gray-600 mt-1 mb-3">Salva una copia di backup di tutti i dati attuali in un file JSON.</p>
-                <button 
-                    onClick={handleExport}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                    <i className="fa-solid fa-download mr-2"></i>Esporta Database
-                </button>
-            </div>
+                {remoteFeedback && (
+                    <div className={`p-3 rounded-lg text-sm ${remoteFeedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{remoteFeedback.message}</div>
+                )}
+                
+                <fieldset disabled={isRemoteLoading}>
+                    <div>
+                        <label htmlFor="db-provider" className="block text-sm font-medium text-gray-700 mb-1">Provider Database</label>
+                        <select id="db-provider" value={provider} onChange={(e) => setProvider(e.target.value as any)} className="w-full p-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="local">Locale (Memoria del Browser)</option>
+                            <option value="supabase">Supabase</option>
+                            <option value="firebase">Firebase</option>
+                        </select>
+                    </div>
 
-            {/* Import Section */}
-            <div className="p-4 border rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-700">Importa Dati</h3>
-                <p className="text-sm text-gray-600 mt-1 mb-3">
-                    <span className="font-bold text-yellow-700">Attenzione:</span> L'importazione sostituirà tutti i dati esistenti con quelli del file selezionato.
-                </p>
-                <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                    disabled={isLoading}
-                    className="block w-full text-sm text-gray-500
-                                file:mr-4 file:py-2 file:px-4
-                                file:rounded-full file:border-0
-                                file:text-sm file:font-semibold
-                                file:bg-blue-50 file:text-blue-700
-                                hover:file:bg-blue-100"
-                />
+                    {provider === 'supabase' && (
+                        <div className="space-y-4 p-4 border-t mt-4">
+                            <h3 className="font-semibold">Configurazione Supabase</h3>
+                            <div>
+                                <label htmlFor="supabase-url" className="block text-sm font-medium text-gray-700 mb-1">Supabase URL</label>
+                                <input id="supabase-url" type="text" value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} placeholder="https://xyz.supabase.co" className="w-full p-2 border border-gray-300 rounded-lg"/>
+                            </div>
+                             <div>
+                                <label htmlFor="supabase-key" className="block text-sm font-medium text-gray-700 mb-1">Supabase Anon Key</label>
+                                <input id="supabase-key" type="password" value={supabaseKey} onChange={e => setSupabaseKey(e.target.value)} placeholder="eyJ..." className="w-full p-2 border border-gray-300 rounded-lg"/>
+                            </div>
+                             <p className="text-xs text-gray-500">Trovi queste informazioni in "Project Settings" &gt; "API" nel tuo progetto Supabase.</p>
+                        </div>
+                    )}
+
+                    {provider === 'firebase' && (
+                        <div className="space-y-4 p-4 border-t mt-4">
+                            <h3 className="font-semibold">Configurazione Firebase</h3>
+                             <div>
+                                <label htmlFor="firebase-config" className="block text-sm font-medium text-gray-700 mb-1">Oggetto di configurazione Firebase</label>
+                                <textarea id="firebase-config" value={firebaseConfig} onChange={e => setFirebaseConfig(e.target.value)} rows={6} placeholder={`{\n  "apiKey": "...",\n  "authDomain": "...",\n  ...\n}`} className="w-full p-2 border border-gray-300 rounded-lg font-mono text-sm"/>
+                            </div>
+                            <p className="text-xs text-gray-500">Incolla l'intero oggetto `firebaseConfig` da "Project Settings" &gt; "General" &gt; "Your apps" nel tuo progetto Firebase.</p>
+                        </div>
+                    )}
+                </fieldset>
+                
+                <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                    <button onClick={handleTestConnection} disabled={isRemoteLoading || provider === 'local'} className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 disabled:bg-gray-300">
+                        {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Test Connessione'}
+                    </button>
+                    <button onClick={handleSaveRemoteConfig} disabled={isRemoteLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
+                        {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Configurazione'}
+                    </button>
+                </div>
             </div>
             
-            {/* Clear Section */}
-            <div className="p-4 border border-red-300 bg-red-50 rounded-lg">
-                <h3 className="text-lg font-semibold text-red-800">Svuota Database</h3>
-                <p className="text-sm text-red-700 mt-1 mb-3">
-                    <span className="font-bold">Azione irreversibile:</span> Rimuove tutti i dati dall'applicazione e la riporta allo stato iniziale.
-                </p>
-                <button
-                    onClick={handleClear}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 disabled:bg-gray-400"
-                >
-                    <i className="fa-solid fa-trash-alt mr-2"></i>Svuota e Resetta
-                </button>
-            </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg max-w-3xl mx-auto space-y-6">
+                 <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Gestione Dati Locali</h2>
+                    <p className="text-sm text-gray-500 mt-1">Esporta, importa o resetta i dati salvati nella memoria di questo browser.</p>
+                </div>
+                
+                {localFeedback && (
+                    <div className={`p-3 rounded-lg text-sm ${localFeedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {localFeedback.message}
+                    </div>
+                )}
 
+                <div className="p-4 border rounded-lg space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-700">Backup e Ripristino</h3>
+                    <div className="flex flex-wrap gap-4 items-center">
+                         <button onClick={handleExportLocal} disabled={isLocalLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
+                            <i className="fa-solid fa-download mr-2"></i>Esporta Dati Locali
+                        </button>
+                         <input type="file" accept=".json" onChange={handleFileChangeLocal} ref={fileInputRef} disabled={isLocalLoading} className="block w-full max-w-xs text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                    </div>
+                </div>
+
+                <div className="p-4 border border-red-300 bg-red-50 rounded-lg">
+                    <h3 className="text-lg font-semibold text-red-800">Azione Pericolosa</h3>
+                    <p className="text-sm text-red-700 mt-1 mb-3"><span className="font-bold">Azione irreversibile:</span> Rimuove tutti i dati locali e riporta l'applicazione allo stato iniziale.</p>
+                    <button onClick={handleClearLocal} disabled={isLocalLoading} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 disabled:bg-gray-400">
+                        <i className="fa-solid fa-trash-alt mr-2"></i>Svuota Dati Locali
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

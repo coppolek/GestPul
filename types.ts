@@ -95,10 +95,26 @@ export interface User {
 
 // --- Settings Types ---
 export interface ApiKey {
-    id: 'google_gemini' | 'google_maps' | 'open_route_service';
+    id: 'google_gemini' | 'google_maps' | 'open_route_service' | 'groq';
     name: string;
     key: string;
 }
+
+export interface AiProviderSetting {
+  id: 'ai_provider';
+  value: 'gemini' | 'groq';
+}
+
+export interface DatabaseConfig {
+  id: 'database_config';
+  provider: 'local' | 'supabase' | 'firebase';
+  supabaseUrl: string;
+  supabaseKey: string;
+  firebaseConfig: string;
+}
+
+export type AppSetting = AiProviderSetting | DatabaseConfig;
+
 
 // --- Dashboard Types ---
 export interface Message {

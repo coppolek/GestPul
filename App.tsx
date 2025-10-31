@@ -53,6 +53,7 @@ const MainLayout: React.FC = () => {
         users, setUsers,
         apiKeys, setApiKeys,
         messages, setMessages,
+        appSettings, setAppSettings,
         loading
     } = useAppData();
 
@@ -81,6 +82,7 @@ const MainLayout: React.FC = () => {
                             leaveRequests={leaveRequests} sicknessRecords={sicknessRecords}
                             messages={messages} setMessages={setMessages} 
                             apiKeys={apiKeys}
+                            appSettings={appSettings}
                             />} 
                         />
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
@@ -97,8 +99,8 @@ const MainLayout: React.FC = () => {
                         
                         <Route path="/impostazioni" element={<Navigate to="/impostazioni/utenti" />} />
                         <Route path="/impostazioni/utenti" element={<UserList users={users} setUsers={setUsers} employees={employees} />} />
-                        <Route path="/impostazioni/api" element={<ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} />} />
-                        <Route path="/impostazioni/database" element={<DatabaseSettings />} />
+                        <Route path="/impostazioni/api" element={<ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} appSettings={appSettings} setAppSettings={setAppSettings} />} />
+                        <Route path="/impostazioni/database" element={<DatabaseSettings appSettings={appSettings} setAppSettings={setAppSettings} />} />
 
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>

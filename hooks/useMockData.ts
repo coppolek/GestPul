@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message, AppSetting } from '../types';
 import * as api from '../services/api';
 
 
@@ -12,6 +12,7 @@ export const useAppData = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSetting[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
 
@@ -28,6 +29,7 @@ export const useAppData = () => {
                 usersData,
                 apiKeysData,
                 messagesData,
+                appSettingsData,
             ] = await Promise.all([
                 api.getData<Employee[]>('employees'),
                 api.getData<WorkSite[]>('sites'),
@@ -37,6 +39,7 @@ export const useAppData = () => {
                 api.getData<User[]>('users'),
                 api.getData<ApiKey[]>('apiKeys'),
                 api.getData<Message[]>('messages'),
+                api.getData<AppSetting[]>('appSettings'),
             ]);
 
             setEmployees(employeesData);
@@ -47,6 +50,7 @@ export const useAppData = () => {
             setUsers(usersData);
             setApiKeys(apiKeysData);
             setMessages(messagesData.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+            setAppSettings(appSettingsData);
 
         } catch (error) {
             console.error("Failed to fetch initial data", error);
@@ -67,6 +71,7 @@ export const useAppData = () => {
     users, setUsers,
     apiKeys, setApiKeys,
     messages, setMessages,
+    appSettings, setAppSettings,
     loading 
   };
 };
