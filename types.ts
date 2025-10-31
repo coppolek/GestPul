@@ -121,7 +121,14 @@ export interface DatabaseConfig {
   firebaseConfig: string;
 }
 
-export type AppSetting = AiProviderSetting | DatabaseConfig;
+export interface ModuleVisibility {
+  id: 'module_visibility';
+  settings: {
+    [path: string]: Role[];
+  };
+}
+
+export type AppSetting = AiProviderSetting | DatabaseConfig | ModuleVisibility;
 
 
 // --- Dashboard Types ---

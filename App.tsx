@@ -1,9 +1,11 @@
 
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useAppData } from './hooks/useMockData';
+import { AppSetting, ModuleVisibility } from './types';
+
 
 // Components
 import Login from './components/Login';
@@ -22,6 +24,9 @@ import UserList from './components/UserList';
 import ApiSettings from './components/ApiSettings';
 import ChatBot from './components/ChatBot';
 import DatabaseSettings from './components/DatabaseSettings';
+import ModuleSettings from './components/ModuleSettings';
+import WorkerArea from './components/worker/WorkerArea';
+
 
 const App: React.FC = () => {
     const { user, authLoading } = useAuth();
@@ -65,7 +70,7 @@ const MainLayout: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans">
-            <Sidebar />
+            <Sidebar appSettings={appSettings} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="flex justify-between items-center p-4 bg-white border-b">
                     <h1 className="text-xl font-semibold">Gestionale Coppolecchia</h1>
@@ -90,6 +95,7 @@ const MainLayout: React.FC = () => {
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
                         <Route path="/presenze" element={<Attendances employees={employees} attendances={attendances} setAttendances={setAttendances} />} />
+                        <Route path="/lavoratori" element={<WorkerArea employees={employees} sites={sites} attendances={attendances} setAttendances={setAttendances} />} />
                         
                         <Route path="/assenze" element={<Navigate to="/assenze/richieste" />} />
                         <Route path="/assenze/richieste" element={<LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />} />
@@ -102,6 +108,7 @@ const MainLayout: React.FC = () => {
                         
                         <Route path="/impostazioni" element={<Navigate to="/impostazioni/utenti" />} />
                         <Route path="/impostazioni/utenti" element={<UserList users={users} setUsers={setUsers} employees={employees} />} />
+                        <Route path="/impostazioni/moduli" element={<ModuleSettings appSettings={appSettings} setAppSettings={setAppSettings} />} />
                         <Route path="/impostazioni/api" element={<ApiSettings apiKeys={apiKeys} setApiKeys={setApiKeys} appSettings={appSettings} setAppSettings={setAppSettings} />} />
                         <Route path="/impostazioni/database" element={<DatabaseSettings appSettings={appSettings} setAppSettings={setAppSettings} />} />
 
@@ -114,11 +121,14 @@ const MainLayout: React.FC = () => {
     );
 };
 
-const Sidebar: React.FC = () => {
+const Sidebar: React.FC<{ appSettings: AppSetting[] }> = ({ appSettings }) => {
     const { user } = useAuth();
+    const moduleVisibility = useMemo(() => appSettings.find(s => s.id === 'module_visibility') as ModuleVisibility | undefined, [appSettings]);
+    const visibilitySettings = moduleVisibility?.settings;
 
     const navItems = [
         { path: '/', icon: 'fa-tachometer-alt', label: 'Dashboard', roles: ['Amministratore', 'Responsabile', 'Lavoratore'] },
+        { path: '/lavoratori', icon: 'fa-user-clock', label: 'Timbratura', roles: ['Amministratore', 'Lavoratore'] },
         { path: '/dipendenti', icon: 'fa-users', label: 'Dipendenti', roles: ['Amministratore', 'Responsabile'] },
         { path: '/cantieri', icon: 'fa-building-user', label: 'Cantieri', roles: ['Amministratore', 'Responsabile'] },
         { path: '/presenze', icon: 'fa-clock', label: 'Presenze', roles: ['Amministratore', 'Responsabile'] },
@@ -143,6 +153,7 @@ const Sidebar: React.FC = () => {
             basePath: '/impostazioni',
             subItems: [
                 { path: '/impostazioni/utenti', label: 'Utenti' },
+                { path: '/impostazioni/moduli', label: 'Moduli' },
                 { path: '/impostazioni/api', label: 'API' },
                 { path: '/impostazioni/database', label: 'Database' },
             ]
@@ -155,8 +166,13 @@ const Sidebar: React.FC = () => {
                 <h2 className="text-2xl font-bold text-blue-600 text-center">Coppolecchia</h2>
             </div>
             <ul className="py-4">
-                {navItems.map((item, index) => (
-                    item.roles.includes(user!.role) && (
+                {navItems.map((item, index) => {
+                    const itemPath = item.basePath || item.path!;
+                    const isVisible = visibilitySettings
+                        ? visibilitySettings[itemPath]?.includes(user!.role)
+                        : item.roles.includes(user!.role); // Fallback to original roles array
+
+                    return isVisible && (
                         <li key={index} className="px-4">
                             {item.subItems ? (
                                 <SidebarDropdown item={item} />
@@ -168,7 +184,7 @@ const Sidebar: React.FC = () => {
                             )}
                         </li>
                     )
-                ))}
+                })}
             </ul>
         </nav>
     );

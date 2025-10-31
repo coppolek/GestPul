@@ -1,4 +1,4 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord, ModuleVisibility, Role } from '../types';
 
 type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings' | 'attendances';
 
@@ -65,7 +65,21 @@ const initialData: DataShape = {
   messages: [],
   appSettings: [
       { id: 'ai_provider', value: 'gemini' },
-      { id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' }
+      { id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' },
+      { 
+        id: 'module_visibility', 
+        settings: {
+          '/': ['Amministratore', 'Responsabile', 'Lavoratore'],
+          '/dipendenti': ['Amministratore', 'Responsabile'],
+          '/cantieri': ['Amministratore', 'Responsabile'],
+          '/presenze': ['Amministratore', 'Responsabile'],
+          '/lavoratori': ['Amministratore', 'Lavoratore'],
+          '/assenze': ['Amministratore', 'Responsabile'],
+          '/pianificazione-jolly': ['Amministratore', 'Responsabile'],
+          '/trova-operatori': ['Amministratore', 'Responsabile'],
+          '/impostazioni': ['Amministratore'],
+        }
+      } as ModuleVisibility,
   ]
 };
 
@@ -112,12 +126,22 @@ const getDb = (): DataShape => {
         } else {
             // Check for individual settings
             if (!db.appSettings.find(s => s.id === 'ai_provider')) {
-                db.appSettings.push({ id: 'ai_provider', value: 'gemini' });
+                db.appSettings.push(initialData.appSettings.find(s => s.id === 'ai_provider')!);
                 dbWasModified = true;
             }
             if (!db.appSettings.find(s => s.id === 'database_config')) {
-                db.appSettings.push({ id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' });
+                db.appSettings.push(initialData.appSettings.find(s => s.id === 'database_config')!);
                 dbWasModified = true;
+            }
+            if (!db.appSettings.find(s => s.id === 'module_visibility')) {
+                db.appSettings.push(initialData.appSettings.find(s => s.id === 'module_visibility')!);
+                dbWasModified = true;
+            } else {
+                const visSetting = db.appSettings.find(s => s.id === 'module_visibility') as ModuleVisibility;
+                if(visSetting && !visSetting.settings['/lavoratori']) {
+                    visSetting.settings['/lavoratori'] = ['Amministratore', 'Lavoratore'];
+                    dbWasModified = true;
+                }
             }
         }
 
