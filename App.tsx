@@ -98,7 +98,16 @@ const MainLayout: React.FC = () => {
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
                         <Route path="/presenze" element={<Attendances employees={employees} attendances={attendances} setAttendances={setAttendances} sites={sites} apiKeys={apiKeys} />} />
-                        <Route path="/lavoratori" element={<WorkerArea employees={employees} sites={sites} attendances={attendances} setAttendances={setAttendances} apiKeys={apiKeys} />} />
+                        <Route path="/lavoratori" element={<WorkerArea 
+                            employees={employees} 
+                            sites={sites} 
+                            attendances={attendances} 
+                            setAttendances={setAttendances} 
+                            apiKeys={apiKeys}
+                            leaveRequests={leaveRequests}
+                            setLeaveRequests={setLeaveRequests} 
+                            />} 
+                        />
                         
                         <Route path="/assenze" element={<Navigate to="/assenze/richieste" />} />
                         <Route path="/assenze/richieste" element={<LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />} />
@@ -131,7 +140,7 @@ const Sidebar: React.FC<{ appSettings: AppSetting[] }> = ({ appSettings }) => {
 
     const navItems = [
         { path: '/', icon: 'fa-tachometer-alt', label: 'Dashboard', roles: ['Amministratore', 'Responsabile', 'Lavoratore'] },
-        { path: '/lavoratori', icon: 'fa-user-clock', label: 'Timbratura', roles: ['Amministratore', 'Lavoratore'] },
+        { path: '/lavoratori', icon: 'fa-user-clock', label: 'Area Personale', roles: ['Amministratore', 'Lavoratore'] },
         { path: '/dipendenti', icon: 'fa-users', label: 'Dipendenti', roles: ['Amministratore', 'Responsabile'] },
         { path: '/cantieri', icon: 'fa-building-user', label: 'Cantieri', roles: ['Amministratore', 'Responsabile'] },
         { path: '/presenze', icon: 'fa-clock', label: 'Presenze', roles: ['Amministratore', 'Responsabile'] },

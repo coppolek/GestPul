@@ -8,9 +8,10 @@ interface LeaveRequestModalProps {
   employees: Employee[];
   isSaving: boolean;
   request: LeaveRequest | null;
+  currentEmployeeId?: string;
 }
 
-const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, onSave, employees, isSaving, request }) => {
+const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, onSave, employees, isSaving, request, currentEmployeeId }) => {
   const [formData, setFormData] = useState({
     employeeId: '',
     type: AbsenceType.FERIE,
@@ -37,7 +38,7 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
   // Reset or populate state when modal is opened/request changes
   useEffect(() => {
     if (isOpen) {
-        if (request) {
+        if (request) { // Editing existing request
             setFormData({
                 employeeId: request.employeeId,
                 type: request.type,
@@ -47,19 +48,20 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
             });
             const employee = employees.find(e => e.id === request.employeeId);
             setEmployeeSearch(employee ? `${employee.firstName} ${employee.lastName}` : '');
-        } else {
+        } else { // New request
+            const employeeForNewRequest = employees.find(e => e.id === currentEmployeeId);
             setFormData({
-                employeeId: '',
+                employeeId: currentEmployeeId || '',
                 type: AbsenceType.FERIE,
                 startDate: new Date().toISOString().split('T')[0],
                 endDate: new Date().toISOString().split('T')[0],
                 reason: '',
             });
-            setEmployeeSearch('');
+            setEmployeeSearch(employeeForNewRequest ? `${employeeForNewRequest.firstName} ${employeeForNewRequest.lastName}` : '');
         }
         setIsEmployeeDropdownOpen(false);
     }
-  }, [isOpen, request, employees]);
+  }, [isOpen, request, employees, currentEmployeeId]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -125,9 +127,9 @@ const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({ isOpen, onClose, 
                     placeholder="Cerca dipendente..."
                     className="w-full p-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
                     autoComplete="off"
-                    disabled={isSaving || !!request}
+                    disabled={isSaving || !!request || !!currentEmployeeId}
                 />
-                {isEmployeeDropdownOpen && !request && (
+                {isEmployeeDropdownOpen && !request && !currentEmployeeId && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                         {filteredEmployees.length > 0 ? (
                             filteredEmployees.map(emp => (

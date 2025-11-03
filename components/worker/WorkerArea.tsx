@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Employee, WorkSite, AttendanceRecord, ApiKey } from '../../types';
+import { Employee, WorkSite, AttendanceRecord, ApiKey, LeaveRequest } from '../../types';
 import * as api from '../../services/api';
+import WorkerLeaveRequests from './WorkerLeaveRequests';
 
 interface WorkerAreaProps {
     employees: Employee[];
@@ -9,6 +10,8 @@ interface WorkerAreaProps {
     attendances: AttendanceRecord[];
     setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>;
     apiKeys: ApiKey[];
+    leaveRequests: LeaveRequest[];
+    setLeaveRequests: React.Dispatch<React.SetStateAction<LeaveRequest[]>>;
 }
 
 // Helper functions for geolocation
@@ -35,12 +38,13 @@ const formatDistance = (meters: number): string => {
 };
 
 
-const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, setAttendances, apiKeys }) => {
+const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, setAttendances, apiKeys, leaveRequests, setLeaveRequests }) => {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [location, setLocation] = useState<{ latitude: number; longitude: number; } | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'clocking' | 'requests'>('clocking');
 
     const openRouteServiceApiKey = useMemo(() => apiKeys.find(k => k.id === 'open_route_service')?.key, [apiKeys]);
 
@@ -181,6 +185,20 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             setIsLoading(false);
         }
     };
+    
+    const TabButton: React.FC<{tabId: 'clocking' | 'requests'; label: string; icon: string}> = ({ tabId, label, icon }) => (
+        <button
+            onClick={() => setActiveTab(tabId)}
+            className={`flex-1 p-4 text-lg font-semibold flex items-center justify-center gap-2 border-b-4 transition-colors ${
+                activeTab === tabId 
+                ? 'border-blue-600 text-blue-600' 
+                : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+            }`}
+        >
+            <i className={`fa-solid ${icon}`}></i>
+            {label}
+        </button>
+    );
 
     if (!currentEmployee) {
         return (
@@ -194,68 +212,89 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
     const nextAction: 'Entrata' | 'Uscita' | null = !lastAttendance || lastAttendance.type === 'Uscita' ? 'Entrata' : 'Uscita';
 
     return (
-        <div className="max-w-2xl mx-auto space-y-8">
+        <div className="max-w-3xl mx-auto space-y-6">
             <div className="bg-white p-8 rounded-xl shadow-lg text-center">
                 <h2 className="text-3xl font-bold text-gray-800">Ciao, {currentEmployee.firstName}!</h2>
-                {lastAttendance ? (
-                     <p className="text-lg text-gray-600 mt-2">
-                         La tua ultima timbratura è stata un'
-                         <span className={`font-bold ${lastAttendance.type === 'Entrata' ? 'text-green-600' : 'text-red-600'}`}>{lastAttendance.type.toLowerCase()}</span>
-                         {' '}alle ore {new Date(lastAttendance.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}.
-                     </p>
-                ) : (
-                    <p className="text-lg text-gray-600 mt-2">Non hai ancora effettuato timbrature oggi.</p>
-                )}
-            </div>
-
-            <div className="bg-white p-8 rounded-xl shadow-lg">
-                 <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Pulsantiera Timbratura</h3>
-                 {error && <div className="p-3 bg-red-100 text-red-700 rounded-lg mb-4 text-center">{error}</div>}
-                 {locationError && !location && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg mb-4 text-center">{locationError}</div>}
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    <button
-                        onClick={() => handleClockInOut('Entrata')}
-                        disabled={isLoading || nextAction !== 'Entrata' || !location}
-                        className="p-8 bg-green-500 text-white rounded-lg shadow-md hover:bg-green-600 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 flex flex-col items-center justify-center"
-                    >
-                        <i className="fa-solid fa-right-to-bracket text-4xl mb-2"></i>
-                        <span className="text-2xl font-bold">ENTRATA</span>
-                    </button>
-                     <button
-                        onClick={() => handleClockInOut('Uscita')}
-                        disabled={isLoading || nextAction !== 'Uscita' || !location}
-                        className="p-8 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 flex flex-col items-center justify-center"
-                    >
-                         <i className="fa-solid fa-right-from-bracket text-4xl mb-2"></i>
-                        <span className="text-2xl font-bold">USCITA</span>
-                    </button>
-                 </div>
-                 {isLoading && (
-                    <div className="text-center mt-4 text-blue-600">
-                        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
-                        Registrazione in corso...
-                    </div>
-                 )}
+                 <p className="text-lg text-gray-600 mt-2">Questa è la tua area personale.</p>
             </div>
             
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">I Tuoi Cantieri di Oggi</h3>
-                {assignmentsToday.length > 0 ? (
-                    <div className="space-y-4">
-                        {assignmentsToday.map((ass, index) => (
-                             <div key={index} className="p-4 bg-gray-50 rounded-lg border">
-                                <p className="font-bold text-gray-800">{ass.siteName}</p>
-                                <p className="text-sm text-gray-600">{ass.siteAddress}</p>
-                                <div className="text-sm text-gray-600 mt-1">
-                                    <p>Orario: {ass.workingHours}</p>
+             <div className="bg-white rounded-xl shadow-lg">
+                <div className="flex border-b">
+                    <TabButton tabId="clocking" label="Timbratura" icon="fa-user-clock" />
+                    <TabButton tabId="requests" label="Richieste" icon="fa-calendar-check" />
+                </div>
+                
+                <div className="p-6">
+                    {activeTab === 'clocking' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Pulsantiera Timbratura</h3>
+                                 {lastAttendance ? (
+                                     <p className="text-base text-gray-600 mt-2 text-center">
+                                         La tua ultima timbratura è stata un'
+                                         <span className={`font-bold ${lastAttendance.type === 'Entrata' ? 'text-green-600' : 'text-red-600'}`}>{lastAttendance.type.toLowerCase()}</span>
+                                         {' '}alle ore {new Date(lastAttendance.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}.
+                                     </p>
+                                ) : (
+                                    <p className="text-base text-gray-600 mt-2 text-center">Non hai ancora effettuato timbrature oggi.</p>
+                                )}
+                                {error && <div className="p-3 bg-red-100 text-red-700 rounded-lg my-4 text-center">{error}</div>}
+                                {locationError && !location && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg my-4 text-center">{locationError}</div>}
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                    <button
+                                        onClick={() => handleClockInOut('Entrata')}
+                                        disabled={isLoading || nextAction !== 'Entrata' || !location}
+                                        className="p-8 bg-green-500 text-white rounded-lg shadow-md hover:bg-green-600 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 flex flex-col items-center justify-center"
+                                    >
+                                        <i className="fa-solid fa-right-to-bracket text-4xl mb-2"></i>
+                                        <span className="text-2xl font-bold">ENTRATA</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleClockInOut('Uscita')}
+                                        disabled={isLoading || nextAction !== 'Uscita' || !location}
+                                        className="p-8 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 flex flex-col items-center justify-center"
+                                    >
+                                        <i className="fa-solid fa-right-from-bracket text-4xl mb-2"></i>
+                                        <span className="text-2xl font-bold">USCITA</span>
+                                    </button>
                                 </div>
+                                {isLoading && (
+                                    <div className="text-center mt-4 text-blue-600">
+                                        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                        Registrazione in corso...
+                                    </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-gray-500 italic text-center py-4">Nessun cantiere assegnato per oggi.</p>
-                )}
+                            
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800 mb-4">I Tuoi Cantieri di Oggi</h3>
+                                {assignmentsToday.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {assignmentsToday.map((ass, index) => (
+                                            <div key={index} className="p-4 bg-gray-50 rounded-lg border">
+                                                <p className="font-bold text-gray-800">{ass.siteName}</p>
+                                                <p className="text-sm text-gray-600">{ass.siteAddress}</p>
+                                                <div className="text-sm text-gray-600 mt-1">
+                                                    <p>Orario: {ass.workingHours}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 italic text-center py-4">Nessun cantiere assegnato per oggi.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    {activeTab === 'requests' && (
+                        <WorkerLeaveRequests 
+                            employees={employees}
+                            leaveRequests={leaveRequests}
+                            setLeaveRequests={setLeaveRequests}
+                        />
+                    )}
+                </div>
             </div>
         </div>
     );
