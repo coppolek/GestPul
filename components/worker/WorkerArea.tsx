@@ -51,15 +51,42 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
     const handleClocking = async (type: 'Entrata' | 'Uscita') => {
         if (!currentEmployee) return;
         setIsSubmitting(true);
+
+        const getLocation = (): Promise<{ latitude: number, longitude: number } | null> => {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    console.warn("Geolocation is not supported by this browser.");
+                    resolve(null);
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve({
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                        });
+                    },
+                    (error) => {
+                        console.warn("Geolocation error:", error.message);
+                        resolve(null); // Resolve with null on error, don't block clocking
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        };
+
+        const location = await getLocation();
+
         try {
             const newRecord: Omit<AttendanceRecord, 'id'> = {
                 employeeId: currentEmployee.id,
                 timestamp: new Date().toISOString(),
                 type: type,
-                notes: 'Timbratura da Area Lavoratore'
+                notes: 'Timbratura da Area Lavoratore',
+                location: location || undefined,
             };
             const savedRecord = await api.addData<Omit<AttendanceRecord, 'id'>, AttendanceRecord>('attendances', newRecord);
-            setAttendances(prev => [...prev, savedRecord]);
+            setAttendances(prev => [...prev, savedRecord].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
         } catch (error) {
             console.error("Failed to save attendance record", error);
             alert("Errore durante la timbratura. Riprova.");

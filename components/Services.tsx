@@ -158,7 +158,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     if (originalSite && employeesForThisSite) {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Spread originalSite to ensure all WorkSite properties are included, then override assignments.
+                        // FIX: Spread `originalSite` to include all properties of the WorkSite object, preventing a type error where the object was missing required fields.
                         const updatedSite: WorkSite = {
                             ...originalSite,
                             assignments: [...existingAssignmentsToKeep, ...newAssignments]

@@ -68,6 +68,10 @@ export interface AttendanceRecord {
   timestamp: string; // ISO string for date and time
   type: 'Entrata' | 'Uscita';
   notes?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
 }
 
 // For JollyPlans component

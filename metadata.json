@@ -1,5 +1,7 @@
 {
   "name": "Coppolecchia",
   "description": "Un'applicazione gestionale per l'impresa di pulizie Coppolecchia, per tracciare dipendenti, cantieri e scadenze.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

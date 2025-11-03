@@ -93,6 +93,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
                 <th className="p-3 font-semibold text-gray-600">Ora</th>
                 <th className="p-3 font-semibold text-gray-600">Tipo</th>
                 <th className="p-3 font-semibold text-gray-600">Note</th>
+                <th className="p-3 font-semibold text-gray-600 text-center">Posizione</th>
                 <th className="p-3 font-semibold text-gray-600 text-center">Azioni</th>
               </tr>
             </thead>
@@ -110,6 +111,21 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
                         </span>
                     </td>
                     <td className="p-3 text-gray-600">{record.notes}</td>
+                    <td className="p-3 text-center">
+                        {record.location ? (
+                            <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${record.location.latitude},${record.location.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Mostra su mappa"
+                            >
+                                <i className="fa-solid fa-map-location-dot"></i>
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                    </td>
                     <td className="p-3 text-center">
                         <button onClick={() => handleDeleteAttendance(record.id)} className="text-red-600 hover:text-red-800" title="Elimina"><i className="fa-solid fa-trash"></i></button>
                     </td>
