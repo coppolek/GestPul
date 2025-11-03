@@ -11,10 +11,16 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
     const dbConfig = useMemo(() => appSettings.find(s => s.id === 'database_config') as DatabaseConfig | undefined, [appSettings]);
     
     // Local state for the forms
-    const [provider, setProvider] = useState<'local' | 'supabase' | 'firebase'>('local');
+    const [provider, setProvider] = useState<'local' | 'supabase' | 'firebase' | 'mysql'>('local');
     const [supabaseUrl, setSupabaseUrl] = useState('');
     const [supabaseKey, setSupabaseKey] = useState('');
     const [firebaseConfig, setFirebaseConfig] = useState('');
+    const [mysqlHost, setMysqlHost] = useState('');
+    const [mysqlPort, setMysqlPort] = useState('3306');
+    const [mysqlUser, setMysqlUser] = useState('');
+    const [mysqlPassword, setMysqlPassword] = useState('');
+    const [mysqlDatabase, setMysqlDatabase] = useState('');
+
 
     // State for local DB management
     const [isLocalLoading, setIsLocalLoading] = useState(false);
@@ -31,6 +37,11 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
             setSupabaseUrl(dbConfig.supabaseUrl || '');
             setSupabaseKey(dbConfig.supabaseKey || '');
             setFirebaseConfig(dbConfig.firebaseConfig || '');
+            setMysqlHost(dbConfig.mysqlHost || '');
+            setMysqlPort(dbConfig.mysqlPort || '3306');
+            setMysqlUser(dbConfig.mysqlUser || '');
+            setMysqlPassword(dbConfig.mysqlPassword || '');
+            setMysqlDatabase(dbConfig.mysqlDatabase || '');
         }
     }, [dbConfig]);
 
@@ -44,7 +55,12 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
             provider,
             supabaseUrl,
             supabaseKey,
-            firebaseConfig
+            firebaseConfig,
+            mysqlHost,
+            mysqlPort,
+            mysqlUser,
+            mysqlPassword,
+            mysqlDatabase
         };
 
         try {
@@ -72,6 +88,9 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
                  if (!firebaseConfig) throw new Error("L'oggetto di configurazione è obbligatorio.");
                  JSON.parse(firebaseConfig); // Test if it's valid JSON
                  setRemoteFeedback({ type: 'success', message: 'Il formato della configurazione Firebase è valido. (Test di connessione reale non supportato in questa demo).' });
+            } else if (provider === 'mysql') {
+                if (!mysqlHost || !mysqlUser || !mysqlDatabase) throw new Error("Host, Utente e Nome Database sono obbligatori.");
+                setRemoteFeedback({ type: 'success', message: 'I parametri di configurazione MySQL sono presenti. Il test di connessione reale deve essere effettuato dal backend.' });
             }
         } catch (error: any) {
             setRemoteFeedback({ type: 'error', message: `Test fallito: ${error.message}` });
@@ -169,10 +188,40 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
                         <label htmlFor="db-provider" className="block text-sm font-medium text-gray-700 mb-1">Provider Database</label>
                         <select id="db-provider" value={provider} onChange={(e) => setProvider(e.target.value as any)} className="w-full p-2 border border-gray-300 rounded-lg bg-white">
                             <option value="local">Locale (Memoria del Browser)</option>
+                            <option value="mysql">MySQL</option>
                             <option value="supabase">Supabase</option>
                             <option value="firebase">Firebase</option>
                         </select>
                     </div>
+                    
+                    {provider === 'mysql' && (
+                        <div className="space-y-4 p-4 border-t mt-4">
+                            <h3 className="font-semibold">Configurazione MySQL</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="mysql-host" className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                                    <input id="mysql-host" type="text" value={mysqlHost} onChange={e => setMysqlHost(e.target.value)} placeholder="localhost" className="w-full p-2 border border-gray-300 rounded-lg"/>
+                                </div>
+                                <div>
+                                    <label htmlFor="mysql-port" className="block text-sm font-medium text-gray-700 mb-1">Porta</label>
+                                    <input id="mysql-port" type="text" value={mysqlPort} onChange={e => setMysqlPort(e.target.value)} placeholder="3306" className="w-full p-2 border border-gray-300 rounded-lg"/>
+                                </div>
+                                <div>
+                                    <label htmlFor="mysql-user" className="block text-sm font-medium text-gray-700 mb-1">Utente</label>
+                                    <input id="mysql-user" type="text" value={mysqlUser} onChange={e => setMysqlUser(e.target.value)} placeholder="root" className="w-full p-2 border border-gray-300 rounded-lg"/>
+                                </div>
+                                <div>
+                                    <label htmlFor="mysql-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <input id="mysql-password" type="password" value={mysqlPassword} onChange={e => setMysqlPassword(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg"/>
+                                </div>
+                            </div>
+                             <div>
+                                <label htmlFor="mysql-database" className="block text-sm font-medium text-gray-700 mb-1">Nome Database</label>
+                                <input id="mysql-database" type="text" value={mysqlDatabase} onChange={e => setMysqlDatabase(e.target.value)} placeholder="coppolecchia_db" className="w-full p-2 border border-gray-300 rounded-lg"/>
+                            </div>
+                            <p className="text-xs text-gray-500">Queste credenziali verranno utilizzate dal backend per connettersi al database MySQL.</p>
+                        </div>
+                    )}
 
                     {provider === 'supabase' && (
                         <div className="space-y-4 p-4 border-t mt-4">

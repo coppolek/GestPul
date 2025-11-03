@@ -121,10 +121,15 @@ export interface AiProviderSetting {
 
 export interface DatabaseConfig {
   id: 'database_config';
-  provider: 'local' | 'supabase' | 'firebase';
+  provider: 'local' | 'supabase' | 'firebase' | 'mysql';
   supabaseUrl: string;
   supabaseKey: string;
   firebaseConfig: string;
+  mysqlHost?: string;
+  mysqlPort?: string;
+  mysqlUser?: string;
+  mysqlPassword?: string;
+  mysqlDatabase?: string;
 }
 
 export interface ModuleVisibility {
