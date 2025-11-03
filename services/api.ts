@@ -1,6 +1,6 @@
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord, ModuleVisibility, Role } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord, ModuleVisibility, Role, MessageGroup } from '../types';
 
-type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings' | 'attendances';
+type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings' | 'attendances' | 'messageGroups';
 
 type DataShape = {
     employees: Employee[];
@@ -12,6 +12,7 @@ type DataShape = {
     users: User[];
     apiKeys: ApiKey[];
     messages: Message[];
+    messageGroups: MessageGroup[];
     appSettings: AppSetting[];
 };
 
@@ -63,6 +64,7 @@ const initialData: DataShape = {
       { id: 'open_route_service', name: 'OpenRouteService API Key', key: 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUzYmVjNGExMmI0NjRlMWU5OTQyNGE4YWRhZGIxOGUyIiwiaCI6Im11cm11cjY0In0=' },
   ],
   messages: [],
+  messageGroups: [],
   appSettings: [
       { id: 'ai_provider', value: 'gemini' },
       { id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' },
@@ -110,7 +112,8 @@ const getDb = (): DataShape => {
         // Ensures all top-level collections exist and are arrays.
         const arrayCollections: CollectionName[] = [
             'employees', 'sites', 'leaveRequests', 'sicknessRecords', 
-            'attendances', 'schedules', 'users', 'apiKeys', 'messages', 'appSettings'
+            'attendances', 'schedules', 'users', 'apiKeys', 'messages', 
+            'appSettings', 'messageGroups'
         ];
         
         for (const collection of arrayCollections) {
@@ -143,6 +146,17 @@ const getDb = (): DataShape => {
             }
         }
         
+        // Messages Migration: Add 'target' field to old messages
+        if (db.messages.some(m => !m.target)) {
+            db.messages = db.messages.map(m => {
+                if (!m.target) {
+                    return { ...m, target: { type: 'all' } };
+                }
+                return m;
+            });
+            dbWasModified = true;
+        }
+
         // Specific check for '/lavoratori' module visibility (nested property)
         const visSetting = db.appSettings.find(s => s.id === 'module_visibility') as ModuleVisibility | undefined;
         if (visSetting && visSetting.settings && !visSetting.settings['/lavoratori']) {

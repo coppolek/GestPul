@@ -60,6 +60,7 @@ const MainLayout: React.FC = () => {
         users, setUsers,
         apiKeys, setApiKeys,
         messages, setMessages,
+        messageGroups, setMessageGroups,
         appSettings, setAppSettings,
         loading
     } = useAppData();
@@ -88,6 +89,7 @@ const MainLayout: React.FC = () => {
                             sites={sites} setSites={setSites}
                             leaveRequests={leaveRequests} sicknessRecords={sicknessRecords}
                             messages={messages} setMessages={setMessages} 
+                            messageGroups={messageGroups} setMessageGroups={setMessageGroups}
                             apiKeys={apiKeys}
                             appSettings={appSettings}
                             />} 

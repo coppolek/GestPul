@@ -132,10 +132,24 @@ export type AppSetting = AiProviderSetting | DatabaseConfig | ModuleVisibility;
 
 
 // --- Dashboard Types ---
+export interface MessageGroup {
+  id: string;
+  name: string;
+  employeeIds: string[];
+}
+
+export interface MessageTarget {
+  type: 'all' | 'role' | 'users' | 'group';
+  role?: Employee['role']; 
+  employeeIds?: string[];
+  groupId?: string;
+}
+
 export interface Message {
   id: string;
   text: string;
   authorId: string;
   authorName: string;
   timestamp: string; // ISO string
+  target: MessageTarget;
 }

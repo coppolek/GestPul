@@ -158,15 +158,9 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     if (originalSite && employeesForThisSite) {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Explicitly constructing the object with all its properties resolves the type error.
+                        // FIX: Spread originalSite to ensure all WorkSite properties are included, then override assignments.
                         const updatedSite: WorkSite = {
-                            id: originalSite.id,
-                            name: originalSite.name,
-                            client: originalSite.client,
-                            address: originalSite.address,
-                            startDate: originalSite.startDate,
-                            endDate: originalSite.endDate,
-                            status: originalSite.status,
+                            ...originalSite,
                             assignments: [...existingAssignmentsToKeep, ...newAssignments]
                         };
                         sitesToUpdatePayload.push(updatedSite);

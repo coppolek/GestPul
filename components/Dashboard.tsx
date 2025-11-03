@@ -1,5 +1,5 @@
 import React from 'react';
-import { Employee, WorkSite, Message, LeaveRequest, SicknessRecord, ApiKey, AppSetting } from '../types';
+import { Employee, WorkSite, Message, LeaveRequest, SicknessRecord, ApiKey, AppSetting, MessageGroup } from '../types';
 import * as api from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import GeminiCommandPrompt from './GeminiCommandPrompt';
@@ -15,13 +15,15 @@ interface DashboardProps {
   sicknessRecords: SicknessRecord[];
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  messageGroups: MessageGroup[];
+  setMessageGroups: React.Dispatch<React.SetStateAction<MessageGroup[]>>;
   apiKeys: ApiKey[];
   appSettings: AppSetting[];
 }
 
 const Dashboard: React.FC<DashboardProps> = (props) => {
   const { user } = useAuth();
-  const { employees, sites, messages, setMessages } = props;
+  const { employees, sites, messages, setMessages, messageGroups, setMessageGroups } = props;
 
   // Worker's Dashboard View
   if (user?.role === 'Lavoratore') {
@@ -29,6 +31,9 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
         <BulletinBoard 
             messages={messages}
             setMessages={setMessages}
+            employees={employees}
+            messageGroups={messageGroups}
+            setMessageGroups={setMessageGroups}
         />
     );
   }
@@ -117,6 +122,9 @@ const Dashboard: React.FC<DashboardProps> = (props) => {
              <BulletinBoard 
                 messages={messages}
                 setMessages={setMessages}
+                employees={employees}
+                messageGroups={messageGroups}
+                setMessageGroups={setMessageGroups}
             />
         )}
     </div>

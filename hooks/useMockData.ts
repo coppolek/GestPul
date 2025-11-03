@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message, AppSetting, AttendanceRecord } from '../types';
+import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, Message, AppSetting, AttendanceRecord, MessageGroup } from '../types';
 import * as api from '../services/api';
 
 
@@ -13,6 +13,7 @@ export const useAppData = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageGroups, setMessageGroups] = useState<MessageGroup[]>([]);
   const [appSettings, setAppSettings] = useState<AppSetting[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -31,6 +32,7 @@ export const useAppData = () => {
                 usersData,
                 apiKeysData,
                 messagesData,
+                messageGroupsData,
                 appSettingsData,
             ] = await Promise.all([
                 api.getData<Employee[]>('employees'),
@@ -42,6 +44,7 @@ export const useAppData = () => {
                 api.getData<User[]>('users'),
                 api.getData<ApiKey[]>('apiKeys'),
                 api.getData<Message[]>('messages'),
+                api.getData<MessageGroup[]>('messageGroups'),
                 api.getData<AppSetting[]>('appSettings'),
             ]);
 
@@ -54,6 +57,7 @@ export const useAppData = () => {
             setUsers(usersData);
             setApiKeys(apiKeysData);
             setMessages(messagesData.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+            setMessageGroups(messageGroupsData);
             setAppSettings(appSettingsData);
 
         } catch (error) {
@@ -76,6 +80,7 @@ export const useAppData = () => {
     users, setUsers,
     apiKeys, setApiKeys,
     messages, setMessages,
+    messageGroups, setMessageGroups,
     appSettings, setAppSettings,
     loading 
   };
