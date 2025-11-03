@@ -33,7 +33,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const login = async (username: string, pass: string): Promise<User | null> => {
         // In a real app, never store plaintext passwords. This is for mock purposes.
         const allUsers = await api.getData<User[]>('users');
-        const foundUser = allUsers.find(u => u.username === username && u.password === pass);
+        const foundUser = allUsers.find(
+            u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === pass
+        );
 
         if (foundUser) {
             // IMPORTANT: Never store the password in the session or state.
