@@ -65,6 +65,7 @@ export interface SicknessRecord {
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
+  siteId?: string;
   timestamp: string; // ISO string for date and time
   type: 'Entrata' | 'Uscita';
   notes?: string;

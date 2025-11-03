@@ -65,7 +65,7 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
         return sites.flatMap(site => 
             site.assignments
                 .filter(a => a.employeeId === currentEmployee.id && a.workingDays.includes(capitalizedDay))
-                .map(a => ({ ...a, siteName: site.name, siteAddress: site.address }))
+                .map(a => ({ ...a, siteId: site.id, siteName: site.name, siteAddress: site.address }))
         );
     }, [sites, currentEmployee]);
 
@@ -118,6 +118,7 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
 
         let note = `Timbratura da area lavoratore.`;
         let proceed = true;
+        let targetAssignment = null;
 
         if (assignmentsToday.length === 0) {
             const reason = prompt("ANOMALIA: Non risultano servizi pianificati per oggi.\n\nInserisci una motivazione per timbrare:");
@@ -130,7 +131,7 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             // Find the most relevant assignment for the current time
             const now = new Date();
             const nowTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
-            let targetAssignment = assignmentsToday.find(ass => {
+            targetAssignment = assignmentsToday.find(ass => {
                  const [start, end] = ass.workingHours.replace(/\s/g, '').split('-');
                  return nowTimeStr >= start && nowTimeStr <= end;
             });
@@ -165,6 +166,7 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
         try {
             const newAttendance: Omit<AttendanceRecord, 'id'> = {
                 employeeId: currentEmployee.id,
+                siteId: targetAssignment?.siteId,
                 timestamp: new Date().toISOString(),
                 type,
                 location: location,

@@ -45,11 +45,11 @@ const initialData: DataShape = {
     { id: 'sick-1', employeeId: 'emp-5', startDate: '2024-07-10', endDate: '2024-07-12', notes: 'Influenza' },
   ],
   attendances: [
-    { id: 'att-1', employeeId: 'emp-1', timestamp: '2024-07-22T08:01:15Z', type: 'Entrata' },
-    { id: 'att-2', employeeId: 'emp-1', timestamp: '2024-07-22T12:05:30Z', type: 'Uscita' },
-    { id: 'att-3', employeeId: 'emp-4', timestamp: '2024-07-22T09:00:05Z', type: 'Entrata' },
-    { id: 'att-4', employeeId: 'emp-4', timestamp: '2024-07-22T13:02:45Z', type: 'Uscita' },
-    { id: 'att-5', employeeId: 'emp-2', timestamp: '2024-07-23T14:00:00Z', type: 'Entrata' },
+    { id: 'att-1', employeeId: 'emp-1', siteId: 'site-1', timestamp: '2024-07-22T08:01:15Z', type: 'Entrata' },
+    { id: 'att-2', employeeId: 'emp-1', siteId: 'site-1', timestamp: '2024-07-22T12:05:30Z', type: 'Uscita' },
+    { id: 'att-3', employeeId: 'emp-4', siteId: 'site-1', timestamp: '2024-07-22T09:00:05Z', type: 'Entrata' },
+    { id: 'att-4', employeeId: 'emp-4', siteId: 'site-1', timestamp: '2024-07-22T13:02:45Z', type: 'Uscita' },
+    { id: 'att-5', employeeId: 'emp-2', siteId: 'site-1', timestamp: '2024-07-23T14:00:00Z', type: 'Entrata' },
   ],
   schedules: [],
   users: [

@@ -46,6 +46,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
   const [filters, setFilters] = useState({ employeeId: '', date: '' });
   
   const employeeMap = useMemo(() => new Map(employees.map(emp => [emp.id, `${emp.firstName} ${emp.lastName}`])), [employees]);
+  const siteMap = useMemo(() => new Map(sites.map(s => [s.id, s.name])), [sites]);
 
   const [distanceInfoCache, setDistanceInfoCache] = useState<Record<string, DistanceInfo>>({});
   const siteCoordsCache = useRef<Record<string, { lat: number; lon: number } | 'error'>>({});
@@ -92,7 +93,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
   }, [attendances, filters]);
 
   useEffect(() => {
-    const getSiteForAttendance = (record: AttendanceRecord): WorkSite | undefined => {
+    const getScheduledSiteForRecord = (record: AttendanceRecord): WorkSite | undefined => {
         const recordDate = new Date(record.timestamp);
         const dayOfWeek = new Intl.DateTimeFormat('it-IT', { weekday: 'long' }).format(recordDate);
         const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
@@ -137,7 +138,8 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
                 continue;
             }
 
-            const site = getSiteForAttendance(record);
+            const site = record.siteId ? sites.find(s => s.id === record.siteId) : getScheduledSiteForRecord(record);
+
             if (!site) {
                 setDistanceInfoCache(prev => ({ ...prev, [record.id]: { status: 'no_site' } }));
                 continue;
@@ -171,7 +173,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
     if (openRouteServiceApiKey) {
         processBatch();
     }
-  }, [filteredAttendances, openRouteServiceApiKey, sites]);
+  }, [filteredAttendances, openRouteServiceApiKey, sites, distanceInfoCache]);
 
   const renderLocationCell = (record: AttendanceRecord) => {
     const distanceInfo = distanceInfoCache[record.id];
@@ -241,6 +243,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
             <thead className="bg-gray-50">
               <tr>
                 <th className="p-3 font-semibold text-gray-600">Dipendente</th>
+                <th className="p-3 font-semibold text-gray-600">Cantiere</th>
                 <th className="p-3 font-semibold text-gray-600">Data</th>
                 <th className="p-3 font-semibold text-gray-600">Ora</th>
                 <th className="p-3 font-semibold text-gray-600">Tipo</th>
@@ -255,6 +258,7 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
                 return (
                     <tr key={record.id} className="border-b hover:bg-gray-50">
                     <td className="p-3 font-medium text-gray-800">{employeeMap.get(record.employeeId) || 'N/A'}</td>
+                    <td className="p-3 text-gray-600">{record.siteId ? siteMap.get(record.siteId) : 'N/D'}</td>
                     <td className="p-3 text-gray-600">{recordDate.toLocaleDateString('it-IT')}</td>
                     <td className="p-3 text-gray-600">{recordDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="p-3 text-gray-600">
