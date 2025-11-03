@@ -25,6 +25,7 @@ import ApiSettings from './components/ApiSettings';
 import ChatBot from './components/ChatBot';
 import DatabaseSettings from './components/DatabaseSettings';
 import ModuleSettings from './components/ModuleSettings';
+// FIX: The file 'file:///components/worker/WorkerArea.tsx' is not a module. This is often due to an empty file or incorrect path. I've created the component and will correct the import path.
 import WorkerArea from './components/worker/WorkerArea';
 
 
@@ -96,7 +97,7 @@ const MainLayout: React.FC = () => {
                         />
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
-                        <Route path="/presenze" element={<Attendances employees={employees} attendances={attendances} setAttendances={setAttendances} />} />
+                        <Route path="/presenze" element={<Attendances employees={employees} attendances={attendances} setAttendances={setAttendances} sites={sites} apiKeys={apiKeys} />} />
                         <Route path="/lavoratori" element={<WorkerArea employees={employees} sites={sites} attendances={attendances} setAttendances={setAttendances} />} />
                         
                         <Route path="/assenze" element={<Navigate to="/assenze/richieste" />} />
