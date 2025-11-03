@@ -3,7 +3,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Employee, WorkSite, AttendanceRecord, ApiKey, LeaveRequest } from '../../types';
 import * as api from '../../services/api';
 import WorkerLeaveRequests from './WorkerLeaveRequests';
-import { GoogleGenAI, Type } from '@google/genai';
 
 interface WorkerAreaProps {
     employees: Employee[];
@@ -41,7 +40,6 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
     const [activeTab, setActiveTab] = useState<'clocking' | 'requests'>('clocking');
 
     const openRouteServiceApiKey = useMemo(() => apiKeys.find(k => k.id === 'open_route_service')?.key, [apiKeys]);
-    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
 
     const currentEmployee = useMemo(() => {
         if (!user || !user.employeeId) return null;
@@ -116,30 +114,28 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
         setError(null);
     
         const now = new Date();
-        let note = `Timbratura da area lavoratore.`;
+        let notes: string[] = [`Timbratura da area lavoratore.`];
         let proceed = true;
-        let roundedTimestamp = now;
+        let roundedTimestamp = new Date(now);
+        const originalTimestamp = new Date(now);
         
-        // Find the most relevant assignment for the current time
         const nowTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
         let targetAssignment = assignmentsToday.find(ass => {
             const [start, end] = ass.workingHours.replace(/\s/g, '').split('-');
             return nowTimeStr >= start && nowTimeStr <= end;
         });
         if (!targetAssignment) {
-            // If not in an active assignment, default to the first one of the day
             targetAssignment = [...assignmentsToday].sort((a, b) => a.workingHours.localeCompare(b.workingHours))[0];
         }
         
         if (!targetAssignment) {
             const reason = prompt("ANOMALIA: Non risultano servizi pianificati per oggi.\n\nInserisci una motivazione per timbrare:");
             if (reason) {
-                note = `Timbratura fuori pianificazione. Motivazione: ${reason}`;
+                notes.push(`Timbratura fuori pianificazione. Motivazione: ${reason}`);
             } else {
                 proceed = false;
             }
         } else {
-            // --- AI Anomaly Check & Rounding Logic ---
             const siteCoords = await geocodeAddress(targetAssignment.siteAddress);
             
             if (siteCoords === 'error') {
@@ -147,70 +143,67 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
                 proceed = false;
             } else {
                 const distance = calculateDistance(location.latitude, location.longitude, siteCoords.lat, siteCoords.lon);
-                
-                // AI Check
-                if (geminiApiKey) {
-                    try {
-                        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-                        const schema = {
-                            type: Type.OBJECT,
-                            properties: {
-                                is_anomaly: { type: Type.BOOLEAN },
-                                message: { type: Type.STRING },
-                            },
-                            required: ['is_anomaly', 'message'],
-                        };
-                        const prompt = `
-                          Sei un sistema di controllo timbrature. Analizza i dati e determina se la timbratura è anomala, fornendo un messaggio per l'utente.
-                          Dati:
-                          - Tipo Timbratura: "${type}"
-                          - Orario Attuale: "${nowTimeStr}"
-                          - Orario Pianificato: "${targetAssignment.workingHours}"
-                          - Distanza dal cantiere: ${Math.round(distance)} metri.
-                          Regole Anomalia:
-                          1. POSIZIONE: L'anomalia si verifica se la distanza è > 200 metri. Questo ha la priorità.
-                          2. ORARIO ENTRATA: Anomalia se l'entrata è > 15 minuti prima dell'inizio pianificato.
-                          3. ORARIO USCITA: Anomalia se l'uscita è > 15 minuti dopo la fine pianificata.
-                          Restituisci un JSON con lo schema fornito.
-                        `;
-                        const response = await ai.models.generateContent({ 
-                            model: 'gemini-2.5-flash', 
-                            contents: prompt, 
-                            config: { responseMimeType: 'application/json', responseSchema: schema }
-                        });
-                        // FIX: Corrected an issue where `response.text()` was called as a function.
-                        // `.text` is a property, not a method.
-                        const result = JSON.parse(response.text);
-                        if (result.is_anomaly) {
-                            const reason = prompt(`ANOMALIA: ${result.message}\n\nInserisci una motivazione per procedere:`);
-                            if (reason) {
-                                note = `Anomalia (${result.message}). Motivazione: ${reason}`;
-                            } else {
-                                proceed = false;
-                            }
-                        }
-                    } catch (aiError) {
-                        console.error("AI check failed, falling back to simple check.", aiError);
-                        // Fallback to simple check
-                         if (distance > 200) {
-                             const reason = prompt(`ANOMALIA: Ti trovi a circa ${Math.round(distance)}m dal cantiere. Motivazione?`);
-                             if (reason) note = `Anomalia (Distanza: ${Math.round(distance)}m). Motivazione: ${reason}`; else proceed = false;
-                         }
+                 if (distance > 200) {
+                    const reason = prompt(`ANOMALIA: Ti trovi a circa ${Math.round(distance)}m dal cantiere. Per favore, fornisci una motivazione:`);
+                    if (reason) {
+                        notes.push(`Anomalia distanza (${Math.round(distance)}m). Motivazione: ${reason}.`);
+                    } else {
+                        proceed = false;
                     }
                 }
-    
-                // Time Rounding
-                const [startStr, endStr] = targetAssignment.workingHours.replace(/\s/g, '').split('-');
-                const [startH, startM] = startStr.split(':').map(Number);
-                const [endH, endM] = endStr.split(':').map(Number);
-    
-                roundedTimestamp = new Date(now);
-                if (type === 'Entrata') {
-                    roundedTimestamp.setHours(startH, startM, 0, 0);
-                } else { // Uscita
-                    roundedTimestamp.setHours(endH, endM, 0, 0);
+
+                if (proceed) {
+                    const [startStr, endStr] = targetAssignment.workingHours.replace(/\s/g, '').split('-');
+                    const [startH, startM] = startStr.split(':').map(Number);
+                    const [endH, endM] = endStr.split(':').map(Number);
+                    
+                    const plannedStartDate = new Date(now);
+                    plannedStartDate.setHours(startH, startM, 0, 0);
+        
+                    const plannedEndDate = new Date(now);
+                    plannedEndDate.setHours(endH, endM, 0, 0);
+                    
+                    const plannedDurationMinutes = (plannedEndDate.getTime() - plannedStartDate.getTime()) / (1000 * 60);
+
+                    if (type === 'Entrata') {
+                        roundedTimestamp = new Date(plannedStartDate);
+                    } else { // Uscita
+                        const clockInRecord = lastAttendance;
+                        if (!clockInRecord || clockInRecord.type !== 'Entrata') {
+                            setError("Errore: Impossibile trovare una timbratura di entrata corrispondente. Per favore, timbra prima l'entrata.");
+                            proceed = false;
+                        } else {
+                            const clockInTime = new Date(clockInRecord.originalTimestamp || clockInRecord.timestamp);
+                            const actualDurationMinutes = (now.getTime() - clockInTime.getTime()) / (1000 * 60);
+                            const diff = Math.round(Math.abs(actualDurationMinutes - plannedDurationMinutes));
+
+                            if (actualDurationMinutes > plannedDurationMinutes + 5) { // Oltre 5 min di tolleranza
+                                const reason = prompt(`ANOMALIA: Hai lavorato circa ${diff} minuti in più del previsto (${plannedDurationMinutes} min). Per favore, fornisci una motivazione:`);
+                                if (reason) {
+                                    notes.push(`Anomalia durata (lavoro extra: ${diff} min). Motivazione: ${reason}.`);
+                                    const roundedClockInTime = new Date(clockInRecord.timestamp);
+                                    roundedTimestamp = new Date(roundedClockInTime.getTime() + plannedDurationMinutes * 60 * 1000);
+                                } else {
+                                    proceed = false;
+                                }
+                            } else if (plannedDurationMinutes - actualDurationMinutes > 5) { // Oltre 5 min di tolleranza
+                                const reason = prompt(`ANOMALIA: Hai lavorato circa ${diff} minuti in meno del previsto (${plannedDurationMinutes} min). Per favore, fornisci una motivazione:`);
+                                if (reason) {
+                                    notes.push(`Anomalia durata (lavoro in meno: ${diff} min). Motivazione: ${reason}.`);
+                                    const minutes = now.getMinutes();
+                                    const roundedMinutes = Math.floor(minutes / 15) * 15;
+                                    roundedTimestamp = new Date(now);
+                                    roundedTimestamp.setMinutes(roundedMinutes, 0, 0);
+                                } else {
+                                    proceed = false;
+                                }
+                            } else {
+                                const roundedClockInTime = new Date(clockInRecord.timestamp);
+                                roundedTimestamp = new Date(roundedClockInTime.getTime() + plannedDurationMinutes * 60 * 1000);
+                            }
+                        }
+                    }
                 }
-                note += ` (Orario originale: ${now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })})`;
             }
         }
     
@@ -218,16 +211,20 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             setIsLoading(false);
             return;
         }
+
+        if (originalTimestamp.getTime() !== roundedTimestamp.getTime()) {
+            notes.push(`(Orario originale: ${originalTimestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })})`);
+        }
         
         try {
             const newAttendance: Omit<AttendanceRecord, 'id'> = {
                 employeeId: currentEmployee.id,
                 siteId: targetAssignment?.siteId,
                 timestamp: roundedTimestamp.toISOString(),
-                originalTimestamp: now.toISOString(),
+                originalTimestamp: originalTimestamp.toISOString(),
                 type,
                 location: location,
-                notes: note,
+                notes: notes.join(' '),
             };
             const savedRecord = await api.addData<Omit<AttendanceRecord, 'id'>, AttendanceRecord>('attendances', newAttendance);
             setAttendances(prev => [savedRecord, ...prev].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
