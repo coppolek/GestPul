@@ -255,12 +255,21 @@ const Attendances: React.FC<AttendancesProps> = ({ employees, attendances, setAt
             <tbody>
               {filteredAttendances.map(record => {
                 const recordDate = new Date(record.timestamp);
+                const originalTime = record.originalTimestamp 
+                    ? new Date(record.originalTimestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                    : null;
                 return (
                     <tr key={record.id} className="border-b hover:bg-gray-50">
                     <td className="p-3 font-medium text-gray-800">{employeeMap.get(record.employeeId) || 'N/A'}</td>
                     <td className="p-3 text-gray-600">{record.siteId ? siteMap.get(record.siteId) : 'N/D'}</td>
                     <td className="p-3 text-gray-600">{recordDate.toLocaleDateString('it-IT')}</td>
-                    <td className="p-3 text-gray-600">{recordDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td 
+                      className="p-3 text-gray-600"
+                      title={originalTime ? `Timbratura originale: ${originalTime}` : ''}
+                    >
+                      {recordDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      {originalTime && <i className="fa-solid fa-info-circle text-blue-500 ml-2 text-xs"></i>}
+                    </td>
                     <td className="p-3 text-gray-600">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.type === 'Entrata' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {record.type}

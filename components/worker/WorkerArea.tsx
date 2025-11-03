@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Employee, WorkSite, AttendanceRecord, ApiKey, LeaveRequest } from '../../types';
 import * as api from '../../services/api';
 import WorkerLeaveRequests from './WorkerLeaveRequests';
+import { GoogleGenAI, Type } from '@google/genai';
 
 interface WorkerAreaProps {
     employees: Employee[];
@@ -30,13 +31,6 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     return R * c; // in metres
 };
   
-const formatDistance = (meters: number): string => {
-    if (meters < 1000) {
-        return `${Math.round(meters)} m`;
-    }
-    return `${(meters / 1000).toFixed(1)} km`;
-};
-
 
 const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, setAttendances, apiKeys, leaveRequests, setLeaveRequests }) => {
     const { user } = useAuth();
@@ -47,6 +41,7 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
     const [activeTab, setActiveTab] = useState<'clocking' | 'requests'>('clocking');
 
     const openRouteServiceApiKey = useMemo(() => apiKeys.find(k => k.id === 'open_route_service')?.key, [apiKeys]);
+    const geminiApiKey = useMemo(() => apiKeys.find(k => k.id === 'google_gemini')?.key, [apiKeys]);
 
     const currentEmployee = useMemo(() => {
         if (!user || !user.employeeId) return null;
@@ -116,52 +111,109 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             setError("Posizione non disponibile. Impossibile timbrare. Controlla i permessi del browser.");
             return;
         }
-
+    
         setIsLoading(true);
         setError(null);
-
+    
+        const now = new Date();
         let note = `Timbratura da area lavoratore.`;
         let proceed = true;
-        let targetAssignment = null;
-
-        if (assignmentsToday.length === 0) {
+        let roundedTimestamp = now;
+        
+        // Find the most relevant assignment for the current time
+        const nowTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
+        let targetAssignment = assignmentsToday.find(ass => {
+            const [start, end] = ass.workingHours.replace(/\s/g, '').split('-');
+            return nowTimeStr >= start && nowTimeStr <= end;
+        });
+        if (!targetAssignment) {
+            // If not in an active assignment, default to the first one of the day
+            targetAssignment = [...assignmentsToday].sort((a, b) => a.workingHours.localeCompare(b.workingHours))[0];
+        }
+        
+        if (!targetAssignment) {
             const reason = prompt("ANOMALIA: Non risultano servizi pianificati per oggi.\n\nInserisci una motivazione per timbrare:");
             if (reason) {
                 note = `Timbratura fuori pianificazione. Motivazione: ${reason}`;
             } else {
-                proceed = false; // User cancelled prompt
+                proceed = false;
             }
         } else {
-            // Find the most relevant assignment for the current time
-            const now = new Date();
-            const nowTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
-            targetAssignment = assignmentsToday.find(ass => {
-                 const [start, end] = ass.workingHours.replace(/\s/g, '').split('-');
-                 return nowTimeStr >= start && nowTimeStr <= end;
-            });
-            if (!targetAssignment) {
-                 // If not in an active assignment, default to the first one of the day
-                 targetAssignment = [...assignmentsToday].sort((a, b) => a.workingHours.localeCompare(b.workingHours))[0];
-            }
-            
+            // --- AI Anomaly Check & Rounding Logic ---
             const siteCoords = await geocodeAddress(targetAssignment.siteAddress);
-
+            
             if (siteCoords === 'error') {
                 setError(`Impossibile verificare la posizione del cantiere "${targetAssignment.siteName}". Timbratura non permessa.`);
                 proceed = false;
             } else {
                 const distance = calculateDistance(location.latitude, location.longitude, siteCoords.lat, siteCoords.lon);
-                if (distance > 200) { // Anomaly threshold: 200 meters
-                    const reason = prompt(`ANOMALIA: Non ti trovi presso il cantiere "${targetAssignment.siteName}" (distanza: ~${formatDistance(distance)}).\n\nInserisci una motivazione per timbrare comunque:`);
-                    if (reason) {
-                        note = `Timbratura fuori sede (~${formatDistance(distance)}). Motivazione: ${reason}`;
-                    } else {
-                        proceed = false; // User cancelled prompt
+                
+                // AI Check
+                if (geminiApiKey) {
+                    try {
+                        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+                        const schema = {
+                            type: Type.OBJECT,
+                            properties: {
+                                is_anomaly: { type: Type.BOOLEAN },
+                                message: { type: Type.STRING },
+                            },
+                            required: ['is_anomaly', 'message'],
+                        };
+                        const prompt = `
+                          Sei un sistema di controllo timbrature. Analizza i dati e determina se la timbratura è anomala, fornendo un messaggio per l'utente.
+                          Dati:
+                          - Tipo Timbratura: "${type}"
+                          - Orario Attuale: "${nowTimeStr}"
+                          - Orario Pianificato: "${targetAssignment.workingHours}"
+                          - Distanza dal cantiere: ${Math.round(distance)} metri.
+                          Regole Anomalia:
+                          1. POSIZIONE: L'anomalia si verifica se la distanza è > 200 metri. Questo ha la priorità.
+                          2. ORARIO ENTRATA: Anomalia se l'entrata è > 15 minuti prima dell'inizio pianificato.
+                          3. ORARIO USCITA: Anomalia se l'uscita è > 15 minuti dopo la fine pianificata.
+                          Restituisci un JSON con lo schema fornito.
+                        `;
+                        const response = await ai.models.generateContent({ 
+                            model: 'gemini-2.5-flash', 
+                            contents: prompt, 
+                            config: { responseMimeType: 'application/json', responseSchema: schema }
+                        });
+                        // FIX: Corrected an issue where `response.text()` was called as a function.
+                        // `.text` is a property, not a method.
+                        const result = JSON.parse(response.text);
+                        if (result.is_anomaly) {
+                            const reason = prompt(`ANOMALIA: ${result.message}\n\nInserisci una motivazione per procedere:`);
+                            if (reason) {
+                                note = `Anomalia (${result.message}). Motivazione: ${reason}`;
+                            } else {
+                                proceed = false;
+                            }
+                        }
+                    } catch (aiError) {
+                        console.error("AI check failed, falling back to simple check.", aiError);
+                        // Fallback to simple check
+                         if (distance > 200) {
+                             const reason = prompt(`ANOMALIA: Ti trovi a circa ${Math.round(distance)}m dal cantiere. Motivazione?`);
+                             if (reason) note = `Anomalia (Distanza: ${Math.round(distance)}m). Motivazione: ${reason}`; else proceed = false;
+                         }
                     }
                 }
+    
+                // Time Rounding
+                const [startStr, endStr] = targetAssignment.workingHours.replace(/\s/g, '').split('-');
+                const [startH, startM] = startStr.split(':').map(Number);
+                const [endH, endM] = endStr.split(':').map(Number);
+    
+                roundedTimestamp = new Date(now);
+                if (type === 'Entrata') {
+                    roundedTimestamp.setHours(startH, startM, 0, 0);
+                } else { // Uscita
+                    roundedTimestamp.setHours(endH, endM, 0, 0);
+                }
+                note += ` (Orario originale: ${now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })})`;
             }
         }
-
+    
         if (!proceed) {
             setIsLoading(false);
             return;
@@ -171,7 +223,8 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             const newAttendance: Omit<AttendanceRecord, 'id'> = {
                 employeeId: currentEmployee.id,
                 siteId: targetAssignment?.siteId,
-                timestamp: new Date().toISOString(),
+                timestamp: roundedTimestamp.toISOString(),
+                originalTimestamp: now.toISOString(),
                 type,
                 location: location,
                 notes: note,

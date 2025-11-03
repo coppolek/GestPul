@@ -67,6 +67,7 @@ export interface AttendanceRecord {
   employeeId: string;
   siteId?: string;
   timestamp: string; // ISO string for date and time
+  originalTimestamp?: string; // ISO string for the original, unrounded time
   type: 'Entrata' | 'Uscita';
   notes?: string;
   location?: {
