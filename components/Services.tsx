@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import ServiceAssignmentModal from './modals/ServiceAssignmentModal';
@@ -158,7 +156,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     if (originalSite && employeesForThisSite) {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Spread `originalSite` to include all properties of the WorkSite object, preventing a type error where the object was missing required fields.
+                        // FIX: Spread `originalSite` to include all properties of the WorkSite object, preventing a type error.
                         const updatedSite: WorkSite = {
                             ...originalSite,
                             assignments: [...existingAssignmentsToKeep, ...newAssignments]

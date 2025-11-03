@@ -98,7 +98,7 @@ const MainLayout: React.FC = () => {
                         <Route path="/dipendenti" element={<EmployeeList employees={employees} setEmployees={setEmployees} sites={sites} />} />
                         <Route path="/cantieri" element={<SiteList sites={sites} setSites={setSites} employees={employees} />} />
                         <Route path="/presenze" element={<Attendances employees={employees} attendances={attendances} setAttendances={setAttendances} sites={sites} apiKeys={apiKeys} />} />
-                        <Route path="/lavoratori" element={<WorkerArea employees={employees} sites={sites} attendances={attendances} setAttendances={setAttendances} />} />
+                        <Route path="/lavoratori" element={<WorkerArea employees={employees} sites={sites} attendances={attendances} setAttendances={setAttendances} apiKeys={apiKeys} />} />
                         
                         <Route path="/assenze" element={<Navigate to="/assenze/richieste" />} />
                         <Route path="/assenze/richieste" element={<LeaveRequests employees={employees} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} />} />

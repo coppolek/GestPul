@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Employee, WorkSite, AttendanceRecord } from '../../types';
+import { Employee, WorkSite, AttendanceRecord, ApiKey } from '../../types';
 import * as api from '../../services/api';
 
 interface WorkerAreaProps {
@@ -8,14 +8,41 @@ interface WorkerAreaProps {
     sites: WorkSite[];
     attendances: AttendanceRecord[];
     setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>;
+    apiKeys: ApiKey[];
 }
 
-const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, setAttendances }) => {
+// Helper functions for geolocation
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+  
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  
+    return R * c; // in metres
+};
+  
+const formatDistance = (meters: number): string => {
+    if (meters < 1000) {
+        return `${Math.round(meters)} m`;
+    }
+    return `${(meters / 1000).toFixed(1)} km`;
+};
+
+
+const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, setAttendances, apiKeys }) => {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [location, setLocation] = useState<{ latitude: number; longitude: number; } | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
+
+    const openRouteServiceApiKey = useMemo(() => apiKeys.find(k => k.id === 'open_route_service')?.key, [apiKeys]);
 
     const currentEmployee = useMemo(() => {
         if (!user || !user.employeeId) return null;
@@ -43,7 +70,6 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
     }, [sites, currentEmployee]);
 
     useEffect(() => {
-        // Get location on component mount to have it ready
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 setLocation({
@@ -54,57 +80,104 @@ const WorkerArea: React.FC<WorkerAreaProps> = ({ employees, sites, attendances, 
             },
             (error) => {
                 console.error("Geolocation error:", error);
-                setLocationError("Impossibile ottenere la posizione. Assicurati di aver concesso i permessi.");
+                setLocationError("Impossibile ottenere la posizione. Assicurati di aver concesso i permessi per timbrare.");
             },
             { enableHighAccuracy: true }
         );
     }, []);
+
+    const geocodeAddress = async (address: string): Promise<{ lat: number; lon: number } | 'error'> => {
+        if (!openRouteServiceApiKey) return 'error';
+        try {
+            const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${openRouteServiceApiKey}&text=${encodeURIComponent(address)}`);
+            if (!response.ok) return 'error';
+            const data = await response.json();
+            if (data.features && data.features.length > 0) {
+                const [lon, lat] = data.features[0].geometry.coordinates;
+                return { lat, lon };
+            }
+            return 'error';
+        } catch (e) {
+            console.error("Geocoding failed", e);
+            return 'error';
+        }
+    };
 
     const handleClockInOut = async (type: 'Entrata' | 'Uscita') => {
         if (!currentEmployee) {
             setError("Utente lavoratore non trovato.");
             return;
         }
+        if (!location) {
+            setError("Posizione non disponibile. Impossibile timbrare. Controlla i permessi del browser.");
+            return;
+        }
 
         setIsLoading(true);
         setError(null);
 
-        // Attempt to get fresh location data on clock-in/out
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const currentLocation = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                };
-                setLocation(currentLocation);
-                setLocationError(null);
+        let note = `Timbratura da area lavoratore.`;
+        let proceed = true;
 
-                const newAttendance: Omit<AttendanceRecord, 'id'> = {
-                    employeeId: currentEmployee.id,
-                    timestamp: new Date().toISOString(),
-                    type,
-                    location: currentLocation,
-                    notes: `Timbratura da area lavoratore.`
-                };
-                
-                try {
-                    const savedRecord = await api.addData<Omit<AttendanceRecord, 'id'>, AttendanceRecord>('attendances', newAttendance);
-                    setAttendances(prev => [savedRecord, ...prev].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-                } catch (apiError) {
-                    console.error("API error on clock-in/out:", apiError);
-                    setError("Errore durante la registrazione della timbratura. Riprova.");
-                } finally {
-                    setIsLoading(false);
+        if (assignmentsToday.length === 0) {
+            const reason = prompt("ANOMALIA: Non risultano servizi pianificati per oggi.\n\nInserisci una motivazione per timbrare:");
+            if (reason) {
+                note = `Timbratura fuori pianificazione. Motivazione: ${reason}`;
+            } else {
+                proceed = false; // User cancelled prompt
+            }
+        } else {
+            // Find the most relevant assignment for the current time
+            const now = new Date();
+            const nowTimeStr = now.toTimeString().substring(0, 5); // "HH:mm"
+            let targetAssignment = assignmentsToday.find(ass => {
+                 const [start, end] = ass.workingHours.replace(/\s/g, '').split('-');
+                 return nowTimeStr >= start && nowTimeStr <= end;
+            });
+            if (!targetAssignment) {
+                 // If not in an active assignment, default to the first one of the day
+                 targetAssignment = [...assignmentsToday].sort((a, b) => a.workingHours.localeCompare(b.workingHours))[0];
+            }
+            
+            const siteCoords = await geocodeAddress(targetAssignment.siteAddress);
+
+            if (siteCoords === 'error') {
+                setError(`Impossibile verificare la posizione del cantiere "${targetAssignment.siteName}". Timbratura non permessa.`);
+                proceed = false;
+            } else {
+                const distance = calculateDistance(location.latitude, location.longitude, siteCoords.lat, siteCoords.lon);
+                if (distance > 200) { // Anomaly threshold: 200 meters
+                    const reason = prompt(`ANOMALIA: Non ti trovi presso il cantiere "${targetAssignment.siteName}" (distanza: ~${formatDistance(distance)}).\n\nInserisci una motivazione per timbrare comunque:`);
+                    if (reason) {
+                        note = `Timbratura fuori sede (~${formatDistance(distance)}). Motivazione: ${reason}`;
+                    } else {
+                        proceed = false; // User cancelled prompt
+                    }
                 }
-            },
-            (geoError) => {
-                console.error("Geolocation error on clock-in/out:", geoError);
-                setError("Impossibile ottenere la posizione per la timbratura. Controlla i permessi e riprova.");
-                setLocationError("Impossibile ottenere la posizione. Assicurati di aver concesso i permessi.");
-                setIsLoading(false);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+            }
+        }
+
+        if (!proceed) {
+            setIsLoading(false);
+            return;
+        }
+        
+        try {
+            const newAttendance: Omit<AttendanceRecord, 'id'> = {
+                employeeId: currentEmployee.id,
+                timestamp: new Date().toISOString(),
+                type,
+                location: location,
+                notes: note,
+            };
+            const savedRecord = await api.addData<Omit<AttendanceRecord, 'id'>, AttendanceRecord>('attendances', newAttendance);
+            setAttendances(prev => [savedRecord, ...prev].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        } catch (apiError) {
+            console.error("API error on clock-in/out:", apiError);
+            setError("Errore durante la registrazione della timbratura. Riprova.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (!currentEmployee) {
