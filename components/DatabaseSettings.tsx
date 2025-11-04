@@ -90,7 +90,31 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
                  setRemoteFeedback({ type: 'success', message: 'Il formato della configurazione Firebase è valido. (Test di connessione reale non supportato in questa demo).' });
             } else if (provider === 'mysql') {
                 if (!mysqlHost || !mysqlUser || !mysqlDatabase) throw new Error("Host, Utente e Nome Database sono obbligatori.");
-                setRemoteFeedback({ type: 'success', message: 'I parametri di configurazione MySQL sono presenti. Il test di connessione reale deve essere effettuato dal backend.' });
+
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+                const response = await fetch(`${supabaseUrl}/functions/v1/test-mysql-connection`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${anonKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        host: mysqlHost,
+                        port: mysqlPort,
+                        user: mysqlUser,
+                        password: mysqlPassword,
+                        database: mysqlDatabase,
+                    }),
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    setRemoteFeedback({ type: 'success', message: result.message });
+                } else {
+                    setRemoteFeedback({ type: 'error', message: result.message });
+                }
             }
         } catch (error: any) {
             setRemoteFeedback({ type: 'error', message: `Test fallito: ${error.message}` });
