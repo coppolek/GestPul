@@ -123,6 +123,24 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
         }
     };
 
+    const handleInitializeDatabase = async () => {
+        if (!window.confirm('Sei sicuro di voler inizializzare il database con i dati predefiniti? Questo inserirà dipendenti, cantieri, utenti e API keys di default.')) {
+            return;
+        }
+        setIsRemoteLoading(true);
+        setRemoteFeedback(null);
+        try {
+            localStorage.setItem('supabase_url', supabaseUrl);
+            localStorage.setItem('supabase_key', supabaseKey);
+            await api.initializeDatabaseWithDefaults();
+            setRemoteFeedback({ type: 'success', message: 'Database inizializzato con i dati predefiniti! Verifica Supabase per confermarlo.' });
+        } catch (error: any) {
+            setRemoteFeedback({ type: 'error', message: `Inizializzazione fallita: ${error.message}` });
+        } finally {
+            setIsRemoteLoading(false);
+        }
+    };
+
     const handleExportLocal = () => {
         setIsLocalLoading(true);
         setLocalFeedback(null);
@@ -274,10 +292,15 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
                     )}
                 </fieldset>
                 
-                <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                <div className="flex justify-end items-center gap-4 pt-4 border-t flex-wrap">
                     <button onClick={handleTestConnection} disabled={isRemoteLoading || provider === 'local'} className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 disabled:bg-gray-300">
                         {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Test Connessione'}
                     </button>
+                    {provider !== 'local' && (
+                        <button onClick={handleInitializeDatabase} disabled={isRemoteLoading} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300">
+                            {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Carica Dati Predefiniti'}
+                        </button>
+                    )}
                     <button onClick={handleSaveRemoteConfig} disabled={isRemoteLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
                         {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Configurazione'}
                     </button>

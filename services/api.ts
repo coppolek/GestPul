@@ -250,3 +250,92 @@ export const importDbFromString = (jsonString: string): void => {
 export const clearDb = (): void => {
     localStorage.removeItem(DB_KEY);
 };
+
+export const initializeDatabaseWithDefaults = async (): Promise<void> => {
+    const supabaseUrl = localStorage.getItem('supabase_url');
+    const supabaseKey = localStorage.getItem('supabase_key');
+
+    if (!supabaseUrl || !supabaseKey) {
+        console.warn('Supabase credentials not configured');
+        return;
+    }
+
+    try {
+        const headers = {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+        };
+
+        // Load employees
+        const employeesResponse = await fetch(`${supabaseUrl}/rest/v1/employees`, {
+            method: 'GET',
+            headers,
+        });
+
+        if (employeesResponse.ok) {
+            const existing = await employeesResponse.json();
+            if (existing.length === 0) {
+                await fetch(`${supabaseUrl}/rest/v1/employees`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(initialData.employees),
+                });
+            }
+        }
+
+        // Load sites
+        const sitesResponse = await fetch(`${supabaseUrl}/rest/v1/sites`, {
+            method: 'GET',
+            headers,
+        });
+
+        if (sitesResponse.ok) {
+            const existing = await sitesResponse.json();
+            if (existing.length === 0) {
+                await fetch(`${supabaseUrl}/rest/v1/sites`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(initialData.sites),
+                });
+            }
+        }
+
+        // Load users
+        const usersResponse = await fetch(`${supabaseUrl}/rest/v1/users`, {
+            method: 'GET',
+            headers,
+        });
+
+        if (usersResponse.ok) {
+            const existing = await usersResponse.json();
+            if (existing.length === 0) {
+                await fetch(`${supabaseUrl}/rest/v1/users`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(initialData.users),
+                });
+            }
+        }
+
+        // Load API keys
+        const apiKeysResponse = await fetch(`${supabaseUrl}/rest/v1/apiKeys`, {
+            method: 'GET',
+            headers,
+        });
+
+        if (apiKeysResponse.ok) {
+            const existing = await apiKeysResponse.json();
+            if (existing.length === 0) {
+                await fetch(`${supabaseUrl}/rest/v1/apiKeys`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(initialData.apiKeys),
+                });
+            }
+        }
+
+        console.log('Database initialized with default data');
+    } catch (error) {
+        console.error('Failed to initialize database with defaults:', error);
+    }
+};
