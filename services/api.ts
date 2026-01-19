@@ -30,8 +30,8 @@ const initialData: DataShape = {
   attendances: [],
   schedules: [],
   users: [
-      // Default Admin User for first access
-      { id: 'user-admin', username: 'admin', password: 'password', role: 'Amministratore' },
+      // Default Admin User for first access - Updated password to 'admin'
+      { id: 'user-admin', username: 'admin', password: 'admin', role: 'Amministratore' },
   ],
   apiKeys: [
       { id: 'google_gemini', name: 'Google Gemini API Key', key: '' },
@@ -105,6 +105,13 @@ const getDbLocal = (): DataShape => {
                 db.appSettings.push(settingObject);
                 dbWasModified = true;
             }
+        }
+
+        // Migration: Update admin password to 'admin' if it was 'password'
+        const adminUser = db.users.find((u: any) => u.username === 'admin');
+        if (adminUser && adminUser.password === 'password') {
+            adminUser.password = 'admin';
+            dbWasModified = true;
         }
 
         if (dbWasModified) saveDbLocal(db);
