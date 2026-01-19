@@ -2,6 +2,7 @@
 import { Employee, WorkSite, LeaveRequest, SicknessRecord, Schedule, User, ApiKey, AbsenceStatus, AbsenceType, SiteAssignment, Message, AppSetting, AttendanceRecord, ModuleVisibility, Role, MessageGroup, DatabaseConfig } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc, addDoc, query, where } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 
 type CollectionName = 'employees' | 'sites' | 'leaveRequests' | 'sicknessRecords' | 'schedules' | 'users' | 'apiKeys' | 'messages' | 'appSettings' | 'attendances' | 'messageGroups';
 
@@ -22,6 +23,10 @@ type DataShape = {
 // Changed key to ensure a fresh start for "Production" mode
 const DB_KEY = 'coppolecchia_prod_db_v1';
 
+// Default configuration provided by user
+const DEFAULT_SUPABASE_URL = 'https://zfznvvffbmzvwordkqtx.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_PkOy0_rDc6rTbEgNlscAkw_51iEdG6w';
+
 const initialData: DataShape = {
   employees: [],
   sites: [],
@@ -30,7 +35,7 @@ const initialData: DataShape = {
   attendances: [],
   schedules: [],
   users: [
-      // Default Admin User for first access - Updated password to 'admin'
+      // Default Admin User for first access
       { id: 'user-admin', username: 'admin', password: 'admin', role: 'Amministratore' },
   ],
   apiKeys: [
@@ -43,7 +48,13 @@ const initialData: DataShape = {
   messageGroups: [],
   appSettings: [
       { id: 'ai_provider', value: 'gemini' },
-      { id: 'database_config', provider: 'local', supabaseUrl: '', supabaseKey: '', firebaseConfig: '' },
+      { 
+          id: 'database_config', 
+          provider: 'supabase', // Set DEFAULT to Supabase
+          supabaseUrl: DEFAULT_SUPABASE_URL, 
+          supabaseKey: DEFAULT_SUPABASE_KEY, 
+          firebaseConfig: '' 
+      },
       { 
         id: 'module_visibility', 
         settings: {
@@ -122,9 +133,10 @@ const getDbLocal = (): DataShape => {
     return initialData;
 };
 
-// --- Firebase Initialization Helper ---
+// --- Initialization Helpers ---
 let firebaseApp: any = null;
 let firestoreDb: any = null;
+let supabaseClient: any = null;
 
 const getFirebaseInstance = () => {
     const localDb = getDbLocal();
@@ -146,11 +158,37 @@ const getFirebaseInstance = () => {
     return null;
 };
 
-const getCurrentProvider = (): 'local' | 'firebase' => {
+const getSupabaseInstance = () => {
     const localDb = getDbLocal();
     const dbConfig = localDb.appSettings.find(s => s.id === 'database_config') as DatabaseConfig | undefined;
+
+    // Use default values if local DB has them, otherwise fallback to hardcoded default for immediate connection
+    const url = dbConfig?.supabaseUrl || DEFAULT_SUPABASE_URL;
+    const key = dbConfig?.supabaseKey || DEFAULT_SUPABASE_KEY;
+
+    if (dbConfig && dbConfig.provider === 'supabase' && url && key) {
+        try {
+            if (!supabaseClient) {
+                supabaseClient = createClient(url, key);
+            }
+            return supabaseClient;
+        } catch(e) {
+            console.error("Supabase init error", e);
+            return null;
+        }
+    }
+    return null;
+}
+
+const getCurrentProvider = (): 'local' | 'firebase' | 'supabase' => {
+    const localDb = getDbLocal();
+    const dbConfig = localDb.appSettings.find(s => s.id === 'database_config') as DatabaseConfig | undefined;
+    
     if (dbConfig?.provider === 'firebase' && dbConfig.firebaseConfig) {
         return 'firebase';
+    }
+    if (dbConfig?.provider === 'supabase' && dbConfig.supabaseUrl && dbConfig.supabaseKey) {
+        return 'supabase';
     }
     return 'local';
 };
@@ -165,8 +203,7 @@ export const getData = async <T>(collectionName: CollectionName): Promise<T> => 
 
     if (provider === 'firebase') {
         const db = getFirebaseInstance();
-        if (!db) return [] as unknown as T; // Fallback if init fails
-        
+        if (!db) return [] as unknown as T;
         try {
             const querySnapshot = await getDocs(collection(db, collectionName));
             const data: any[] = [];
@@ -176,6 +213,20 @@ export const getData = async <T>(collectionName: CollectionName): Promise<T> => 
             return data as unknown as T;
         } catch (e) {
             console.error(`Firebase getData error for ${collectionName}:`, e);
+            return [] as unknown as T;
+        }
+    } else if (provider === 'supabase') {
+        const supabase = getSupabaseInstance();
+        if (!supabase) return [] as unknown as T;
+        try {
+            const { data, error } = await supabase.from(collectionName).select('*');
+            if (error) {
+                console.warn(`Supabase error fetching ${collectionName} (Table might not exist):`, error.message);
+                return [] as unknown as T;
+            }
+            return data as unknown as T;
+        } catch (e) {
+            console.error(`Supabase getData error for ${collectionName}:`, e);
             return [] as unknown as T;
         }
     } else {
@@ -196,9 +247,15 @@ export const addData = async <T, R>(collectionName: CollectionName, item: T): Pr
     if (provider === 'firebase') {
         const db = getFirebaseInstance();
         if (!db) throw new Error("Firebase not initialized");
-        // Use setDoc with a custom ID if generated, or addDoc if we let FB decide (but we generate IDs for consistency)
         await setDoc(doc(db, collectionName, itemId), newItem);
         return newItem as unknown as R;
+    } else if (provider === 'supabase') {
+        const supabase = getSupabaseInstance();
+        if (!supabase) throw new Error("Supabase not initialized");
+        // Supabase insert returns the inserted data
+        const { data, error } = await supabase.from(collectionName).insert(newItem).select().single();
+        if (error) throw new Error(error.message);
+        return data as unknown as R;
     } else {
         await delay(100);
         const db = getDbLocal();
@@ -212,8 +269,6 @@ export const addBatchData = async <T, R>(collectionName: CollectionName, items: 
     const provider = getCurrentProvider();
     
     if (provider === 'firebase') {
-        // Firestore batch or parallel writes
-        // For simplicity in this demo, using Promise.all with individual writes
         const db = getFirebaseInstance();
         const results = await Promise.all(items.map(async (item, index) => {
             const id = `${collectionName.slice(0, -1)}-${Date.now()}-${index}`;
@@ -222,6 +277,17 @@ export const addBatchData = async <T, R>(collectionName: CollectionName, items: 
             return newItem;
         }));
         return results as unknown as R[];
+    } else if (provider === 'supabase') {
+        const supabase = getSupabaseInstance();
+        if (!supabase) throw new Error("Supabase not initialized");
+        // Generate IDs for consistency before sending
+        const itemsWithIds = items.map((item, index) => ({
+            ...item,
+            id: `${collectionName.slice(0, -1)}-${Date.now()}-${index}`
+        }));
+        const { data, error } = await supabase.from(collectionName).insert(itemsWithIds).select();
+        if (error) throw new Error(error.message);
+        return data as unknown as R[];
     } else {
         await delay(300);
         const db = getDbLocal();
@@ -240,9 +306,16 @@ export const updateData = async <T extends { id: string }>(collectionName: Colle
 
     if (provider === 'firebase') {
         const db = getFirebaseInstance();
-        const { id: _, ...dataWithoutId } = updatedItem; // Firestore doesn't need ID inside the data if doc ref has it
+        const { id: _, ...dataWithoutId } = updatedItem;
         await updateDoc(doc(db, collectionName, id), dataWithoutId);
         return updatedItem;
+    } else if (provider === 'supabase') {
+        const supabase = getSupabaseInstance();
+        if (!supabase) throw new Error("Supabase not initialized");
+        const { id: _, ...dataWithoutId } = updatedItem;
+        const { data, error } = await supabase.from(collectionName).update(dataWithoutId).eq('id', id).select().single();
+        if (error) throw new Error(error.message);
+        return data as unknown as T;
     } else {
         await delay(100);
         const db = getDbLocal();
@@ -262,6 +335,11 @@ export const deleteData = async (collectionName: CollectionName, id: string): Pr
     if (provider === 'firebase') {
         const db = getFirebaseInstance();
         await deleteDoc(doc(db, collectionName, id));
+    } else if (provider === 'supabase') {
+        const supabase = getSupabaseInstance();
+        if (!supabase) throw new Error("Supabase not initialized");
+        const { error } = await supabase.from(collectionName).delete().eq('id', id);
+        if (error) throw new Error(error.message);
     } else {
         await delay(100);
         const db = getDbLocal();
@@ -276,8 +354,6 @@ export const deleteData = async (collectionName: CollectionName, id: string): Pr
 export const testFirebaseConnection = async (): Promise<boolean> => {
     const db = getFirebaseInstance();
     if (!db) throw new Error("Istanza Firebase non creata. Controlla la configurazione JSON.");
-    
-    // Try to fetch a collection, even if empty, to test permissions/connection
     try {
         await getDocs(collection(db, 'appSettings')); 
         return true;
@@ -286,6 +362,20 @@ export const testFirebaseConnection = async (): Promise<boolean> => {
         throw e;
     }
 };
+
+export const testSupabaseConnection = async (): Promise<boolean> => {
+    const supabase = getSupabaseInstance();
+    if (!supabase) throw new Error("Istanza Supabase non creata.");
+    try {
+        // Just try to fetch the appSettings table, limit 1
+        const { data, error } = await supabase.from('appSettings').select('*').limit(1);
+        if (error) throw error;
+        return true;
+    } catch(e) {
+        console.error("Supabase connection test failed:", e);
+        throw e;
+    }
+}
 
 // --- Full DB Management (Local Only) ---
 export const exportDbAsString = (): string => {

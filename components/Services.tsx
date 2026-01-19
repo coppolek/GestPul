@@ -160,7 +160,7 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
                         const updatedSite: WorkSite = {
-                            ...originalSite,
+                            ...originalSite!,
                             assignments: [...existingAssignmentsToKeep, ...newAssignments]
                         };
                         sitesToUpdatePayload.push(updatedSite);

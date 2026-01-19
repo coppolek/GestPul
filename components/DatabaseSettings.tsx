@@ -83,9 +83,29 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
         try {
             if (provider === 'supabase') {
                 if (!supabaseUrl || !supabaseKey) throw new Error("URL e Chiave Anon sono obbligatori.");
-                const response = await fetch(supabaseUrl, { headers: { 'apikey': supabaseKey } });
-                if (!response.ok) throw new Error(`Connessione fallita con stato: ${response.status}`);
-                setRemoteFeedback({ type: 'success', message: 'Test di connessione a Supabase riuscito!' });
+                
+                // IMPORTANT: Temporarily save locally to let API utilize the config for the test
+                // This is a simulation since we can't inject props into api.ts directly
+                // Ideally, api.ts should read from a context, but it reads from localStorage/initialData
+                const tempConfig = { ...dbConfig, provider: 'supabase', supabaseUrl, supabaseKey };
+                // We rely on the user clicking "Salva" to make it permanent, but for test we try the real client.
+                
+                // For test purposes, we can try to call api.testSupabaseConnection IF the config was saved,
+                // BUT since we might be testing BEFORE saving, we can construct a one-off client check here or
+                // force a save first. 
+                // Better approach: The user should save, then test.
+                // Or, we can use the fetch method directly here as a lightweight test:
+                
+                const response = await fetch(`${supabaseUrl}/rest/v1/appSettings?select=*&limit=1`, { 
+                    headers: { 
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`
+                    } 
+                });
+                
+                if (!response.ok) throw new Error(`Connessione fallita con stato: ${response.status} (Verifica URL/Key o se le tabelle esistono)`);
+                setRemoteFeedback({ type: 'success', message: 'Test di connessione a Supabase riuscito! REST API raggiungibile.' });
+
             } else if (provider === 'firebase') {
                  if (!firebaseConfig) throw new Error("L'oggetto di configurazione è obbligatorio.");
                  JSON.parse(firebaseConfig); // Test if it's valid JSON
