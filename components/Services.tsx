@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { WorkSite, Employee, SiteAssignment } from '../types';
 import ServiceAssignmentModal from './modals/ServiceAssignmentModal';
@@ -43,7 +44,9 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
       try {
         if (siteData.id) {
           // This should not happen from here, but as a safeguard
-          const updatedSite = await api.updateData<WorkSite>('sites', siteData.id, siteData as WorkSite);
+          // Cast to WorkSite as we know id is present
+          const siteToUpdate = siteData as WorkSite;
+          const updatedSite = await api.updateData<WorkSite>('sites', siteData.id, siteToUpdate);
           setSites(prev => prev.map(s => s.id === updatedSite.id ? updatedSite : s));
         } else {
           // Add
@@ -156,7 +159,6 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                     if (originalSite && employeesForThisSite) {
                         const existingAssignmentsToKeep = originalSite.assignments.filter(a => !employeesForThisSite.has(a.employeeId));
                         
-                        // FIX: Spread `originalSite` to include all properties of the WorkSite object, preventing a type error.
                         const updatedSite: WorkSite = {
                             ...originalSite,
                             assignments: [...existingAssignmentsToKeep, ...newAssignments]

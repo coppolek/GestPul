@@ -783,8 +783,32 @@ const JollyPlans: React.FC<JollyPlansProps> = ({
                             return (
                                 <tr key={planner.id}>
                                     <td className={`p-2 border font-medium sticky left-0 z-10 w-48 ${planner.id === EXTRA_JOLLY_ID ? 'bg-indigo-100 text-indigo-800' : 'bg-white text-gray-800'}`}>
-                                        {planner.label}
-                                        {!planner.employeeId && planner.id !== EXTRA_JOLLY_ID && <button onClick={() => setManualPlanners(p => p.filter(mp => mp.id !== planner.id))} className="ml-2 text-red-500 text-xs"><i className="fa fa-trash"></i></button>}
+                                        <div className="flex flex-col">
+                                            <span>{planner.label}</span>
+                                            {!planner.employeeId && planner.id !== EXTRA_JOLLY_ID && (
+                                                <div className="flex gap-2 mt-1">
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newName = prompt("Rinomina Planner Manuale:", planner.label);
+                                                            if (newName && newName.trim()) {
+                                                                setManualPlanners(prev => prev.map(p => p.id === planner.id ? { ...p, label: newName.trim() } : p));
+                                                            }
+                                                        }} 
+                                                        className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1"
+                                                        title="Rinomina"
+                                                    >
+                                                        <i className="fa-solid fa-pen-to-square"></i> Rinomina
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setManualPlanners(p => p.filter(mp => mp.id !== planner.id))} 
+                                                        className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1"
+                                                        title="Elimina"
+                                                    >
+                                                        <i className="fa-solid fa-trash"></i> Elimina
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                     {weekDates.map(date => {
                                         const dateStr = toUTCISOString(date);

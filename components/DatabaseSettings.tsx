@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as api from '../services/api';
 import { AppSetting, DatabaseConfig } from '../types';
@@ -64,9 +65,10 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
         };
 
         try {
+            // Force local save first so api.ts can read the config for the test
             const savedSetting = await api.updateData<DatabaseConfig>('appSettings', newConfig.id, newConfig);
             setAppSettings(prev => prev.map(s => s.id === savedSetting.id ? savedSetting : s));
-            setRemoteFeedback({ type: 'success', message: 'Configurazione salvata con successo. Potrebbe essere necessario ricaricare la pagina per applicare le modifiche.' });
+            setRemoteFeedback({ type: 'success', message: 'Configurazione salvata. Ricarica la pagina per attivare il collegamento completo.' });
         } catch (error) {
             console.error("Failed to save DB config", error);
             setRemoteFeedback({ type: 'error', message: 'Salvataggio fallito.' });
@@ -87,55 +89,23 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
             } else if (provider === 'firebase') {
                  if (!firebaseConfig) throw new Error("L'oggetto di configurazione è obbligatorio.");
                  JSON.parse(firebaseConfig); // Test if it's valid JSON
-                 setRemoteFeedback({ type: 'success', message: 'Il formato della configurazione Firebase è valido. (Test di connessione reale non supportato in questa demo).' });
+                 
+                 // IMPORTANT: Temporarily save locally to let API utilize the config
+                 localStorage.setItem('temp_firebase_config', firebaseConfig);
+                 
+                 try {
+                    await api.testFirebaseConnection();
+                    setRemoteFeedback({ type: 'success', message: 'Connessione a Firebase riuscita! Database Firestore raggiungibile.' });
+                 } catch(e: any) {
+                     throw new Error(`Connessione Firebase fallita: ${e.message || e}`);
+                 }
+                 
             } else if (provider === 'mysql') {
                 if (!mysqlHost || !mysqlUser || !mysqlDatabase) throw new Error("Host, Utente e Nome Database sono obbligatori.");
-
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-                const response = await fetch(`${supabaseUrl}/functions/v1/test-mysql-connection`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${anonKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        host: mysqlHost,
-                        port: mysqlPort,
-                        user: mysqlUser,
-                        password: mysqlPassword,
-                        database: mysqlDatabase,
-                    }),
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    setRemoteFeedback({ type: 'success', message: result.message });
-                } else {
-                    setRemoteFeedback({ type: 'error', message: result.message });
-                }
+                setRemoteFeedback({ type: 'success', message: 'I parametri di configurazione MySQL sono presenti. Il test di connessione reale deve essere effettuato dal backend.' });
             }
         } catch (error: any) {
             setRemoteFeedback({ type: 'error', message: `Test fallito: ${error.message}` });
-        } finally {
-            setIsRemoteLoading(false);
-        }
-    };
-
-    const handleInitializeDatabase = async () => {
-        if (!window.confirm('Sei sicuro di voler inizializzare il database con i dati predefiniti? Questo inserirà dipendenti, cantieri, utenti e API keys di default.')) {
-            return;
-        }
-        setIsRemoteLoading(true);
-        setRemoteFeedback(null);
-        try {
-            localStorage.setItem('supabase_url', supabaseUrl);
-            localStorage.setItem('supabase_key', supabaseKey);
-            await api.initializeDatabaseWithDefaults();
-            setRemoteFeedback({ type: 'success', message: 'Database inizializzato con i dati predefiniti! Verifica Supabase per confermarlo.' });
-        } catch (error: any) {
-            setRemoteFeedback({ type: 'error', message: `Inizializzazione fallita: ${error.message}` });
         } finally {
             setIsRemoteLoading(false);
         }
@@ -292,15 +262,10 @@ const DatabaseSettings: React.FC<DatabaseSettingsProps> = ({ appSettings, setApp
                     )}
                 </fieldset>
                 
-                <div className="flex justify-end items-center gap-4 pt-4 border-t flex-wrap">
+                <div className="flex justify-end items-center gap-4 pt-4 border-t">
                     <button onClick={handleTestConnection} disabled={isRemoteLoading || provider === 'local'} className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 disabled:bg-gray-300">
                         {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Test Connessione'}
                     </button>
-                    {provider !== 'local' && (
-                        <button onClick={handleInitializeDatabase} disabled={isRemoteLoading} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300">
-                            {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Carica Dati Predefiniti'}
-                        </button>
-                    )}
                     <button onClick={handleSaveRemoteConfig} disabled={isRemoteLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
                         {isRemoteLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Salva Configurazione'}
                     </button>
