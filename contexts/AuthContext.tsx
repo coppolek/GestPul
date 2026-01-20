@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import * as api from '../services/api';
@@ -32,7 +33,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = async (username: string, pass: string): Promise<User | null> => {
         // In a real app, never store plaintext passwords. This is for mock purposes.
-        const allUsers = await api.getData<User[]>('users');
+        let allUsers: User[] = [];
+        try {
+            allUsers = await api.getData<User[]>('users');
+        } catch (e) {
+            console.error("Login: failed to fetch users", e);
+        }
+
+        // Special Case: Fresh Database (e.g. just connected to Supabase) or Empty Local DB
+        // If no users exist, allow 'admin'/'admin' and seed the DB.
+        if (!allUsers || allUsers.length === 0) {
+            if (username.trim() === 'admin' && pass === 'admin') {
+                const defaultAdmin: User = { 
+                    id: 'user-admin', 
+                    username: 'admin', 
+                    password: 'admin', 
+                    role: 'Amministratore' 
+                };
+                
+                try {
+                    // Seed the database with the default admin
+                    await api.addData('users', defaultAdmin);
+                    console.log("Database seeded with default admin user.");
+                } catch (e) {
+                    console.error("Failed to seed default admin", e);
+                    // Continue to allow login even if seeding fails (e.g. permission issues), 
+                    // though data won't persist remotely.
+                }
+
+                const { password, ...userToStore } = defaultAdmin;
+                setUser(userToStore as User);
+                sessionStorage.setItem('user', JSON.stringify(userToStore));
+                return userToStore as User;
+            }
+        }
+
         const foundUser = allUsers.find(
             u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === pass
         );
