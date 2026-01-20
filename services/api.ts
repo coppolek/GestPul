@@ -125,6 +125,20 @@ const getDbLocal = (): DataShape => {
             dbWasModified = true;
         }
 
+        // MIGRATION: Force Supabase defaults if current config is local or using old default
+        const dbConfig = db.appSettings.find(s => s.id === 'database_config') as any;
+        if (dbConfig) {
+            // Check if we need to migrate to the new default Supabase instance
+            // We force migration if it's currently 'local' OR if the URL/Key doesn't match the new required one
+            if (dbConfig.provider === 'local' || dbConfig.supabaseUrl !== DEFAULT_SUPABASE_URL || dbConfig.supabaseKey !== DEFAULT_SUPABASE_KEY) {
+                console.log("Migrating database config to default Supabase instance...");
+                dbConfig.provider = 'supabase';
+                dbConfig.supabaseUrl = DEFAULT_SUPABASE_URL;
+                dbConfig.supabaseKey = DEFAULT_SUPABASE_KEY;
+                dbWasModified = true;
+            }
+        }
+
         if (dbWasModified) saveDbLocal(db);
         return db;
     }

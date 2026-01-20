@@ -172,11 +172,10 @@ const Services: React.FC<ServicesProps> = ({ sites, setSites, employees }) => {
                         sitesToUpdatePayload.push(updatedSite);
                     }
                 }
-                const updatedSitesFromApi: WorkSite[] = [];
-                for (const site of sitesToUpdatePayload) {
-                    const updatedSite = await api.updateData<WorkSite>('sites', site.id, site);
-                    updatedSitesFromApi.push(updatedSite);
-                }
+                
+                // Use Promise.all to handle parallel requests
+                const promises = sitesToUpdatePayload.map(site => api.updateData<WorkSite>('sites', site.id, site));
+                const updatedSitesFromApi = await Promise.all(promises);
                 
                 setSites(prev => {
                     const updatedSiteMap = new Map(updatedSitesFromApi.map(s => [s.id, s]));
